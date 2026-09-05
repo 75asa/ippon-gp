@@ -1,0 +1,23 @@
+# ラベル定義。`.github/workflows/setup-repo.yml` で同期します。
+- { name: "type:bug",        color: "d73a4a", description: "不具合" }
+- { name: "type:feature",    color: "a2eeef", description: "新機能・改善" }
+- { name: "type:docs",       color: "0075ca", description: "ドキュメント" }
+- { name: "type:chore",      color: "cfd3d7", description: "雑務・設定" }
+- { name: "type:refactor",   color: "fbca04", description: "挙動を変えない整理" }
+- { name: "type:security",   color: "b60205", description: "セキュリティ" }
+- { name: "type:decision",   color: "5319e7", description: "意思決定が必要（ADR）" }
+- { name: "area:main",       color: "7b1fa2", description: "MAIN（大画面）" }
+- { name: "area:host",       color: "ef6c00", description: "HOST（司会操作）" }
+- { name: "area:judge",      color: "c2185b", description: "JUDGE（審査員）" }
+- { name: "area:camera",     color: "00897b", description: "CAM（カメラ配信）" }
+- { name: "area:config",     color: "1565c0", description: "設定・素材マニフェスト" }
+- { name: "area:infra",      color: "455a64", description: "Firebase / CI / デプロイ" }
+- { name: "area:saas",       color: "2e7d32", description: "SaaS 化・課金" }
+- { name: "area:upstream",   color: "6a1b9a", description: "本家還元" }
+- { name: "area:ops",        color: "8d6e63", description: "本番運用・Runbook" }
+- { name: "priority:P0",     color: "b60205", description: "本番ブロッカー" }
+- { name: "priority:P1",     color: "e99695", description: "重要" }
+- { name: "priority:P2",     color: "f9d0c4", description: "できれば" }
+- { name: "epic",            color: "3e4b9e", description: "マイルストーン単位の親 Issue" }
+- { name: "good first issue",color: "7057ff", description: "初めての人向け" }
+- { name: "blocked",         color: "000000", description: "外部要因で止まっている" }
