@@ -1,0 +1,14 @@
+name: ✅ Task
+description: 作業タスク（docs / chore / refactor）
+labels: ["type:chore"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: やること
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: 完了条件

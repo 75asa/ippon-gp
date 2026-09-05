@@ -1,0 +1,25 @@
+name: ✨ Feature
+description: 新機能・改善提案
+labels: ["type:feature"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 解決したい課題
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 提案
+  - type: dropdown
+    id: milestone
+    attributes:
+      label: 想定マイルストーン
+      options: ["M1 Tokyo Ready", "M2 Kansai Ready", "M3 SaaS Alpha", "M4 Upstream", "未定"]
+  - type: checkboxes
+    id: upstream
+    attributes:
+      label: 本家還元
+      options:
+        - label: 汎用的なので本家にも返せる

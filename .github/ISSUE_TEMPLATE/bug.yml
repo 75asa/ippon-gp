@@ -1,0 +1,39 @@
+name: 🐛 Bug
+description: 動作の不具合
+labels: ["type:bug"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: 画面 / 領域
+      options: [MAIN, HOST, JUDGE, CAM, index, infra/config, docs]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: 何が起きたか
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順
+      placeholder: |
+        1. HOST で「採点モード」
+        2. JUDGE で 6 票投票
+        3. ...
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待する動作
+  - type: input
+    id: env
+    attributes:
+      label: 環境
+      placeholder: "iPhone 15 Safari / Chrome 128 on macOS / 会場 Wi-Fi"
+  - type: dropdown
+    id: severity
+    attributes:
+      label: 本番影響
+      options: ["P0: 本番が止まる", "P1: 演出が崩れる / 回避策あり", "P2: 軽微"]

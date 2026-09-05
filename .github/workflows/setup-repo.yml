@@ -1,0 +1,79 @@
+# リポジトリのラベル・マイルストーン（・GitHub Projects）を冪等にセットアップするワークフロー。
+# Actions タブから手動実行（workflow_dispatch）。
+#
+# - ラベル: .github/labels.yml と同期（作成 / 色・説明の更新）
+# - マイルストーン: M0〜M4 を作成（既存はスキップ）。due date は inputs で上書き可
+# - Projects (v2): secrets.PROJECT_TOKEN（`project` スコープ付き PAT）がある場合のみ作成し、全 open Issue を追加
+name: Setup repo (labels / milestones / project)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tokyo_due:
+        description: "M1 Tokyo Ready の期限 (YYYY-MM-DD, 任意)"
+        required: false
+      kansai_due:
+        description: "M2 Kansai Ready の期限 (YYYY-MM-DD, 任意)"
+        required: false
+      create_project:
+        description: "GitHub Projects (v2) も作成する（PROJECT_TOKEN が必要）"
+        type: boolean
+        default: false
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync labels
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y -q yq >/dev/null 2>&1 || pip install -q yq
+          python3 - <<'PY'
+          import json, os, subprocess, yaml
+          repo = os.environ["REPO"]
+          labels = yaml.safe_load(open(".github/labels.yml"))
+          existing = json.loads(subprocess.check_output(["gh","api",f"repos/{repo}/labels","--paginate"]))
+          names = {l["name"] for l in existing}
+          for l in labels:
+              body = ["-f", f"name={l['name']}", "-f", f"color={l['color']}", "-f", f"description={l.get('description','')}"]
+              if l["name"] in names:
+                  subprocess.run(["gh","api","-X","PATCH",f"repos/{repo}/labels/{l['name']}", "-f", f"new_name={l['name']}", *body[2:]], check=True, stdout=subprocess.DEVNULL)
+                  print("updated", l["name"])
+              else:
+                  subprocess.run(["gh","api","-X","POST",f"repos/{repo}/labels", *body], check=True, stdout=subprocess.DEVNULL)
+                  print("created", l["name"])
+          PY
+
+      - name: Create milestones
+        run: |
+          set -euo pipefail
+          existing=$(gh api "repos/$REPO/milestones?state=all&per_page=100" --jq '.[].title')
+          create() {  # title description due
+            if echo "$existing" | grep -qxF "$1"; then echo "skip: $1"; return; fi
+            args=(-f "title=$1" -f "description=$2")
+            if [ -n "${3:-}" ]; then args+=(-f "due_on=${3}T00:00:00Z"); fi
+            gh api -X POST "repos/$REPO/milestones" "${args[@]}" --jq '"created: \(.number) \(.title)"'
+          }
+          create "M0 Foundation"    "フォークの土台: ドキュメント、テンプレート、Firebase 設定の外出し、index のリンク修正。挙動は変えない" ""
+          create "M1 Tokyo Ready"   "東京フェス本番: 自前 Firebase + 設定駆動化 + セキュリティルール + Runbook" "${{ inputs.tokyo_due }}"
+          create "M2 Kansai Ready"  "関西フェス: events/{eventId} 名前空間、管理 UI、審査員 PIN、履歴、Emulator/E2E" "${{ inputs.kansai_due }}"
+          create "M3 SaaS Alpha"    "マルチテナント、認証、Stripe 課金、プラン制御、ブランド差替、LP" ""
+          create "M4 Upstream"      "本家への還元（継続）" ""
+
+      - name: Create GitHub Project (v2)
+        if: ${{ inputs.create_project }}
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then echo "::error::secrets.PROJECT_TOKEN が未設定です（project スコープ付き PAT が必要）"; exit 1; fi
+          bash scripts/setup-project.sh "${REPO%%/*}" "$REPO"
