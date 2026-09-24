@@ -7,20 +7,7 @@
 <title>IPPON - 審査員</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; touch-action: manipulation; }
-[data-netlify-badge], a[href*="netlify.com"] { display: none !important; }
 html, body { overflow: hidden; height: 100%; }
-</style>
-<script>
-// NetlifyバッジをJSで定期的に削除
-function removeNetlifyBadge() {
-  document.querySelectorAll('[data-netlify-badge], a[href*="netlify.com"]').forEach(el => el.remove());
-  const iframes = document.querySelectorAll('iframe');
-  iframes.forEach(f => { if (f.src && f.src.includes('netlify')) f.remove(); });
-}
-document.addEventListener('DOMContentLoaded', removeNetlifyBadge);
-setInterval(removeNetlifyBadge, 1000);
-</script>
-<style>
 body { background: #000; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; -webkit-text-size-adjust: 100%; overflow: hidden; }
 .logo { font-size: 11px; color: #d4a017; font-weight: 900; letter-spacing: 3px; text-align: center; margin-bottom: 16px; }
 
