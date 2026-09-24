@@ -1,0 +1,65 @@
+# main への push で静的サイト（HTML + config.js）を GitHub Pages にデプロイするワークフロー。
+# 事前に Settings → Pages → Build and deployment → Source を「GitHub Actions」にしておくこと。
+# pull_request では Pages へは出さず、同じ内容をアーティファクトとして残す（レビュー用プレビュー）。
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# main のデプロイは同時に 1 本だけ。PR のプレビュービルドは PR ごとに分け、main のデプロイを巻き込んでキャンセルしない
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.event.number) || 'pages' }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ランタイムに必要なファイルだけを _site/ に集める（docs/ scripts/ .github/ README などは含めない）
+      - name: Build _site
+        run: |
+          set -euo pipefail
+          rm -rf _site
+          mkdir _site
+          cp *.html config.js _site/
+          if [ -d vendor ]; then cp -R vendor _site/; fi
+          ls -la _site
+
+      - name: Upload preview artifact (pull_request)
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-preview
+          path: _site
+
+      - name: Configure Pages
+        if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
