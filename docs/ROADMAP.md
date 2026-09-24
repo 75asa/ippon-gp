@@ -41,7 +41,8 @@
 - [ ] `index.html` の本家 GitHub Pages 絶対 URL → 相対パス化（フォークをデプロイしても本家に飛ばないように）
 - [ ] `firebaseConfig` と Storage ベース URL を `config.js` に外出し（4 画面共通）
 - [ ] GitHub Pages デプロイワークフロー
-- [ ] Netlify バッジ除去コードなど不要コードの削除
+- [x] 旧ホスティング向けバッジ除去コードの削除
+- [ ] `answer_text` 周りの不要コード整理
 - [ ] 外部依存の固定（unpkg → cdnjs or vendoring、SRI）
 
 ## M1: Tokyo Ready（東京フェス本番）
