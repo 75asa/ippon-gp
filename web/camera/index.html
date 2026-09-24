@@ -133,18 +133,57 @@ let stream = null;
 let facing = 'environment';
 let roomId = null;
 
+// カメラ / エンコード設定。config.js の IPPON_CONFIG.camera で上書きできる
+const CAMERA = Object.assign({
+  width: 1920, height: 1080, frameRate: 30,
+  maxBitrate: 6000000,
+  // 帯域が足りない時にフレームレートを落として解像度を守る（顔のアップは動きが少ないので解像度優先）
+  degradationPreference: 'maintain-resolution',
+  contentHint: 'detail',
+}, window.IPPON_CONFIG.camera || {});
+
+// startCamera / flipCam の両方で同じ制約を使う（切替時に解像度指定が消えて 640×480 に落ちていた）
+function videoConstraints() {
+  return { facingMode: facing, width: { ideal: CAMERA.width }, height: { ideal: CAMERA.height }, frameRate: { ideal: CAMERA.frameRate } };
+}
+
+function prepareTrack(track) {
+  try { track.contentHint = CAMERA.contentHint; } catch(e) {}
+  return track;
+}
+
+function updateStatus(text) {
+  const t = stream && stream.getVideoTracks()[0];
+  const st = t && t.getSettings ? t.getSettings() : null;
+  const res = st && st.width ? ` ${st.width}×${st.height}` : '';
+  document.getElementById('status').textContent = text + res;
+}
+
 function genId() {
   return Math.random().toString(36).substr(2,6).toUpperCase();
 }
 
-async function setHighBitrate(pc) {
+async function applyEncodingParams(pc) {
   const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
   if (!sender) return;
+  prepareTrack(sender.track);
   const params = sender.getParameters();
-  if (!params.encodings) params.encodings = [{}];
-  params.encodings[0].maxBitrate = 8000000;
-  params.encodings[0].maxFramerate = 30;
-  try { await sender.setParameters(params); } catch(e) {}
+  if (!params.encodings || !params.encodings.length) params.encodings = [{}];
+  params.encodings[0].maxBitrate = CAMERA.maxBitrate;      // 上限。実際の値は帯域推定で決まる
+  params.encodings[0].maxFramerate = CAMERA.frameRate;
+  params.encodings[0].scaleResolutionDownBy = 1;          // エンコーダ側で勝手に縮小させない
+  params.degradationPreference = CAMERA.degradationPreference;
+  try { await sender.setParameters(params); } catch(e) { console.warn('setParameters failed', e); }
+}
+
+// PeerJS の call は peerConnection が後から生えるので、複数のタイミングで再適用する
+function hookCall(call) {
+  const apply = () => { if (call.peerConnection) applyEncodingParams(call.peerConnection); };
+  apply();
+  call.on('stream', apply);
+  call.on('iceStateChanged', apply);
+  const pc = call.peerConnection;
+  if (pc) pc.addEventListener('connectionstatechange', () => { if (pc.connectionState === 'connected') apply(); });
 }
 
 // スリープ防止
@@ -181,10 +220,8 @@ window.startCamera = async function() {
   } catch(e) {}
 
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: facing, width:{ideal:1920}, height:{ideal:1080} },
-      audio: false
-    });
+    stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints(), audio: false });
+    stream.getVideoTracks().forEach(prepareTrack);
   } catch(e) {
     document.getElementById('status').textContent = 'カメラ許可が必要です';
     document.getElementById('start-screen').style.display = 'flex';
@@ -192,7 +229,7 @@ window.startCamera = async function() {
   }
 
   document.getElementById('video').srcObject = stream;
-  document.getElementById('status').textContent = 'サーバー接続中…';
+  updateStatus('サーバー接続中…');
 
   // カメラ起動後にWake Lock
   try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
@@ -203,7 +240,7 @@ window.startCamera = async function() {
   peer.on('open', () => {
     set(ref(db, 'camera_room'), roomId);
     document.getElementById('live-badge').style.display = 'block';
-    document.getElementById('status').textContent = 'MAIN画面に配信中';
+    updateStatus('MAIN画面に配信中');
   });
 
   peer.on('connection', dc => {
@@ -211,12 +248,7 @@ window.startCamera = async function() {
       if (msg.startsWith('join:')) {
         const viewerId = msg.replace('join:', '');
         const call = peer.call(viewerId, stream);
-        // ビットレートを上げる
-        call.on('stream', () => {});
-        call.peerConnection && setHighBitrate(call.peerConnection);
-        call.on('iceStateChanged', () => {
-          if (call.peerConnection) setHighBitrate(call.peerConnection);
-        });
+        hookCall(call);
       }
     });
   });
@@ -235,23 +267,23 @@ window.flipCam = async function() {
   facing = facing === 'environment' ? 'user' : 'environment';
   if (stream) stream.getTracks().forEach(t => t.stop());
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: facing }, audio: false
-    });
+    stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints(), audio: false });
+    const track = prepareTrack(stream.getVideoTracks()[0]);
     document.getElementById('video').srcObject = stream;
     if (peer) {
-      Object.values(peer.connections).forEach(conns => {
-        conns.forEach(c => {
-          if (c.peerConnection) {
-            c.peerConnection.getSenders().forEach(s => {
-              if (s.track && s.track.kind === 'video')
-                s.replaceTrack(stream.getVideoTracks()[0]);
-            });
+      for (const conns of Object.values(peer.connections)) {
+        for (const c of conns) {
+          const pc = c.peerConnection;
+          if (!pc) continue;
+          for (const s of pc.getSenders()) {
+            if (s.track && s.track.kind === 'video') await s.replaceTrack(track);
           }
-        });
-      });
+          await applyEncodingParams(pc);  // 新しいトラックには encodings が引き継がれない
+        }
+      }
     }
-  } catch(e) {}
+    updateStatus(peer ? 'MAIN画面に配信中' : '');
+  } catch(e) { console.warn('flipCam failed', e); }
 };
 
 window.stopCamera = function() {
