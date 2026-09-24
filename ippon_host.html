@@ -730,6 +730,7 @@ const ANSWER_TEXTS = [
 
 (function buildAnswerBtns() {
   const wrap = document.getElementById('answer-btns');
+  if (!wrap) return; // 画像投影に置き換わり #answer-btns は存在しない。null.appendChild で module 全体が止まるのを防ぐ
   ANSWER_TEXTS.forEach((t, i) => {
     const btn = document.createElement('button');
     btn.className = 'btn';
