@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
+<script src="config.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>IPPON GRAND PRIX</title>
 <style>
@@ -121,58 +122,59 @@ body { background: #000; display: flex; align-items: center; justify-content: ce
 <script>
 // 画像プリロード（DOMに追加してブラウザに確実にキャッシュさせる）
 (function() {
+  var STORAGE_BASE = window.IPPON_CONFIG.storageBase;
   var preloadUrls = [
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/mp3_odai%2Fmain_taiki.png?alt=media&token=c549f99f-6d55-42c7-a3eb-280146b051c0',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_agenda%2Fimage_rule_dummy.png?alt=media&token=bb1c9c96-3fd1-43a9-9faa-378277ac8e36',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_agenda%2Fimage_qr.png?alt=media&token=314140fb-cfed-4200-acae-934af91f1c67',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_agenda%2Fimage_chairman%27s%20eye.png?alt=media&token=6bf664d7-5b30-487e-a714-5d8e714802d0',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_agenda%2Fimage_chairman%27s%20eye_answer.png?alt=media&token=883574a7-45bc-4d62-a9af-553480a43e53',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_agenda%2Fanswer_question1_1.png?alt=media&token=5112ab42-6787-4102-8bae-129e757a481d',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_agenda%2Fanswer_question1_2.png?alt=media&token=9afa1c5b-9784-4d53-b4f2-1c073dd1345b',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_agenda%2Fanswer_question2_1.png?alt=media&token=6d0d8c3f-0581-4fb0-92b5-d08f1eebb7dd',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_agenda%2Fanswer_question2_2.png?alt=media&token=5801a27e-d5c8-41a8-bea1-d936df660c4a',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_agenda%2Fanswer_question3_1.png?alt=media&token=3436f1c0-fca7-4fad-8b23-b0f2e8773a0a',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_agenda%2Fanswer_question3_2.png?alt=media&token=c934af54-42e2-4bb2-bce2-d9b2edd96bb8',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_agenda%2Fimage_winner_player1.png?alt=media&token=95362c30-f5ce-4b1c-aaa5-9759613aa1db',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_agenda%2Fimage_winner_player2.png?alt=media&token=17764024-686f-48e4-9c76-e41bceb21ab3',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_agenda%2Fimage_winner_player3.png?alt=media&token=c5c40aa2-c70e-41aa-8a51-9090111d2840',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_agenda%2Fimage_winner_player4.png?alt=media&token=078bb57c-06a4-4326-a565-76b2192b7932',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_agenda%2Fimage_winner_player5.png?alt=media&token=77cd1c5a-27fe-4264-abdb-0398a71cc75f',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fmain_0.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fmain_1.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fmain_2.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fmain_3.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fmain_4.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fmain_5.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fmain_6.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fmain_IPPON.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fkekka_0.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fkekka_1.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fkekka_2.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fkekka_3.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fkekka_4.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fkekka_5.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_question%2Fimage_question1.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_question%2Fimage_question2.png?alt=media&token=cd331e8b-2f89-427b-9d86-4255213fab14',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_question%2Fimage_question3.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_question%2Fimage_question4.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_question%2Fimage_question5.png?alt=media&token=a294c596-7e23-4198-8fed-020034a3c7ca',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_portrait%2Fportrait_player1.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_portrait%2Fportrait_player2.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_portrait%2Fportrait_player3.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_portrait%2Fportrait_player4.png?alt=media&token=9de8a04a-5719-4acc-9a25-c3f967b01d9f',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_portrait%2Fportrait_player5.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_question%2Fimage_question6.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_introduce%2Fimage_introduce_judge1.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_introduce%2Fimage_introduce_judge2.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_introduce%2Fimage_introduce_judge3.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_introduce%2Fimage_introduce_judge4.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_introduce%2Fimage_introduce_judge5.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_introduce%2Fimage_introduce_player1.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_introduce%2Fimage_introduce_player2.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_introduce%2Fimage_introduce_player3.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_introduce%2Fimage_introduce_player4.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_introduce%2Fimage_introduce_player5.png?alt=media'
+  STORAGE_BASE + 'mp3_odai%2Fmain_taiki.png?alt=media&token=c549f99f-6d55-42c7-a3eb-280146b051c0',
+  STORAGE_BASE + 'image_agenda%2Fimage_rule_dummy.png?alt=media&token=bb1c9c96-3fd1-43a9-9faa-378277ac8e36',
+  STORAGE_BASE + 'image_agenda%2Fimage_qr.png?alt=media&token=314140fb-cfed-4200-acae-934af91f1c67',
+  STORAGE_BASE + 'image_agenda%2Fimage_chairman%27s%20eye.png?alt=media&token=6bf664d7-5b30-487e-a714-5d8e714802d0',
+  STORAGE_BASE + 'image_agenda%2Fimage_chairman%27s%20eye_answer.png?alt=media&token=883574a7-45bc-4d62-a9af-553480a43e53',
+  STORAGE_BASE + 'image_agenda%2Fanswer_question1_1.png?alt=media&token=5112ab42-6787-4102-8bae-129e757a481d',
+  STORAGE_BASE + 'image_agenda%2Fanswer_question1_2.png?alt=media&token=9afa1c5b-9784-4d53-b4f2-1c073dd1345b',
+  STORAGE_BASE + 'image_agenda%2Fanswer_question2_1.png?alt=media&token=6d0d8c3f-0581-4fb0-92b5-d08f1eebb7dd',
+  STORAGE_BASE + 'image_agenda%2Fanswer_question2_2.png?alt=media&token=5801a27e-d5c8-41a8-bea1-d936df660c4a',
+  STORAGE_BASE + 'image_agenda%2Fanswer_question3_1.png?alt=media&token=3436f1c0-fca7-4fad-8b23-b0f2e8773a0a',
+  STORAGE_BASE + 'image_agenda%2Fanswer_question3_2.png?alt=media&token=c934af54-42e2-4bb2-bce2-d9b2edd96bb8',
+  STORAGE_BASE + 'image_agenda%2Fimage_winner_player1.png?alt=media&token=95362c30-f5ce-4b1c-aaa5-9759613aa1db',
+  STORAGE_BASE + 'image_agenda%2Fimage_winner_player2.png?alt=media&token=17764024-686f-48e4-9c76-e41bceb21ab3',
+  STORAGE_BASE + 'image_agenda%2Fimage_winner_player3.png?alt=media&token=c5c40aa2-c70e-41aa-8a51-9090111d2840',
+  STORAGE_BASE + 'image_agenda%2Fimage_winner_player4.png?alt=media&token=078bb57c-06a4-4326-a565-76b2192b7932',
+  STORAGE_BASE + 'image_agenda%2Fimage_winner_player5.png?alt=media&token=77cd1c5a-27fe-4264-abdb-0398a71cc75f',
+  STORAGE_BASE + 'scoring_system%2Fmain_0.png?alt=media',
+  STORAGE_BASE + 'scoring_system%2Fmain_1.png?alt=media',
+  STORAGE_BASE + 'scoring_system%2Fmain_2.png?alt=media',
+  STORAGE_BASE + 'scoring_system%2Fmain_3.png?alt=media',
+  STORAGE_BASE + 'scoring_system%2Fmain_4.png?alt=media',
+  STORAGE_BASE + 'scoring_system%2Fmain_5.png?alt=media',
+  STORAGE_BASE + 'scoring_system%2Fmain_6.png?alt=media',
+  STORAGE_BASE + 'scoring_system%2Fmain_IPPON.png?alt=media',
+  STORAGE_BASE + 'scoring_system%2Fkekka_0.png?alt=media',
+  STORAGE_BASE + 'scoring_system%2Fkekka_1.png?alt=media',
+  STORAGE_BASE + 'scoring_system%2Fkekka_2.png?alt=media',
+  STORAGE_BASE + 'scoring_system%2Fkekka_3.png?alt=media',
+  STORAGE_BASE + 'scoring_system%2Fkekka_4.png?alt=media',
+  STORAGE_BASE + 'scoring_system%2Fkekka_5.png?alt=media',
+  STORAGE_BASE + 'image_question%2Fimage_question1.png?alt=media',
+  STORAGE_BASE + 'image_question%2Fimage_question2.png?alt=media&token=cd331e8b-2f89-427b-9d86-4255213fab14',
+  STORAGE_BASE + 'image_question%2Fimage_question3.png?alt=media',
+  STORAGE_BASE + 'image_question%2Fimage_question4.png?alt=media',
+  STORAGE_BASE + 'image_question%2Fimage_question5.png?alt=media&token=a294c596-7e23-4198-8fed-020034a3c7ca',
+  STORAGE_BASE + 'image_portrait%2Fportrait_player1.png?alt=media',
+  STORAGE_BASE + 'image_portrait%2Fportrait_player2.png?alt=media',
+  STORAGE_BASE + 'image_portrait%2Fportrait_player3.png?alt=media',
+  STORAGE_BASE + 'image_portrait%2Fportrait_player4.png?alt=media&token=9de8a04a-5719-4acc-9a25-c3f967b01d9f',
+  STORAGE_BASE + 'image_portrait%2Fportrait_player5.png?alt=media',
+  STORAGE_BASE + 'image_question%2Fimage_question6.png?alt=media',
+  STORAGE_BASE + 'image_introduce%2Fimage_introduce_judge1.png?alt=media',
+  STORAGE_BASE + 'image_introduce%2Fimage_introduce_judge2.png?alt=media',
+  STORAGE_BASE + 'image_introduce%2Fimage_introduce_judge3.png?alt=media',
+  STORAGE_BASE + 'image_introduce%2Fimage_introduce_judge4.png?alt=media',
+  STORAGE_BASE + 'image_introduce%2Fimage_introduce_judge5.png?alt=media',
+  STORAGE_BASE + 'image_introduce%2Fimage_introduce_player1.png?alt=media',
+  STORAGE_BASE + 'image_introduce%2Fimage_introduce_player2.png?alt=media',
+  STORAGE_BASE + 'image_introduce%2Fimage_introduce_player3.png?alt=media',
+  STORAGE_BASE + 'image_introduce%2Fimage_introduce_player4.png?alt=media',
+  STORAGE_BASE + 'image_introduce%2Fimage_introduce_player5.png?alt=media'
 ];
   // DOMに非表示imgを追加してブラウザに確実にキャッシュさせる
   var wrap = document.createElement('div');
@@ -238,6 +240,8 @@ body { background: #000; display: flex; align-items: center; justify-content: ce
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
 import { getDatabase, ref, onValue, remove, get } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
 
+const STORAGE_BASE = window.IPPON_CONFIG.storageBase;
+
 // ===== PeerJS カメラ受信 =====
 let cameraPeer = null;
 let cameraConnectedRoomId = null;
@@ -269,46 +273,38 @@ function showCameraVideo(show) {
 // ===== PeerJS カメラ受信 ここまで =====
 
 const images = {
-  "taiki": "https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/mp3_odai%2Fmain_taiki.png?alt=media&token=c549f99f-6d55-42c7-a3eb-280146b051c0",
-  "odai_1": "https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_question%2Fimage_question1.png?alt=media",
-  "odai_2": "https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_question%2Fimage_question2.png?alt=media&token=cd331e8b-2f89-427b-9d86-4255213fab14",
-  "odai_3": "https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_question%2Fimage_question3.png?alt=media",
-  "odai_4": "https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_question%2Fimage_question4.png?alt=media",
-  "odai_5": "https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_question%2Fimage_question5.png?alt=media&token=a294c596-7e23-4198-8fed-020034a3c7ca",
-  "odai_6": "https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_question%2Fimage_question6.png?alt=media",
-  "main_0": "https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fmain_0.png?alt=media",
-  "main_1": "https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fmain_1.png?alt=media",
-  "main_2": "https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fmain_2.png?alt=media",
-  "main_3": "https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fmain_3.png?alt=media",
-  "main_4": "https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fmain_4.png?alt=media",
-  "main_5": "https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fmain_5.png?alt=media",
-  "main_6": "https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fmain_6.png?alt=media",
-  "kekka_0": "https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fkekka_0.png?alt=media",
-  "kekka_1": "https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fkekka_1.png?alt=media",
-  "kekka_2": "https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fkekka_2.png?alt=media",
-  "kekka_3": "https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fkekka_3.png?alt=media",
-  "kekka_4": "https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fkekka_4.png?alt=media",
-  "kekka_5": "https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fkekka_5.png?alt=media",
-  "kekka_6": "https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/scoring_system%2Fmain_IPPON.png?alt=media",
+  "taiki": STORAGE_BASE + "mp3_odai%2Fmain_taiki.png?alt=media&token=c549f99f-6d55-42c7-a3eb-280146b051c0",
+  "odai_1": STORAGE_BASE + "image_question%2Fimage_question1.png?alt=media",
+  "odai_2": STORAGE_BASE + "image_question%2Fimage_question2.png?alt=media&token=cd331e8b-2f89-427b-9d86-4255213fab14",
+  "odai_3": STORAGE_BASE + "image_question%2Fimage_question3.png?alt=media",
+  "odai_4": STORAGE_BASE + "image_question%2Fimage_question4.png?alt=media",
+  "odai_5": STORAGE_BASE + "image_question%2Fimage_question5.png?alt=media&token=a294c596-7e23-4198-8fed-020034a3c7ca",
+  "odai_6": STORAGE_BASE + "image_question%2Fimage_question6.png?alt=media",
+  "main_0": STORAGE_BASE + "scoring_system%2Fmain_0.png?alt=media",
+  "main_1": STORAGE_BASE + "scoring_system%2Fmain_1.png?alt=media",
+  "main_2": STORAGE_BASE + "scoring_system%2Fmain_2.png?alt=media",
+  "main_3": STORAGE_BASE + "scoring_system%2Fmain_3.png?alt=media",
+  "main_4": STORAGE_BASE + "scoring_system%2Fmain_4.png?alt=media",
+  "main_5": STORAGE_BASE + "scoring_system%2Fmain_5.png?alt=media",
+  "main_6": STORAGE_BASE + "scoring_system%2Fmain_6.png?alt=media",
+  "kekka_0": STORAGE_BASE + "scoring_system%2Fkekka_0.png?alt=media",
+  "kekka_1": STORAGE_BASE + "scoring_system%2Fkekka_1.png?alt=media",
+  "kekka_2": STORAGE_BASE + "scoring_system%2Fkekka_2.png?alt=media",
+  "kekka_3": STORAGE_BASE + "scoring_system%2Fkekka_3.png?alt=media",
+  "kekka_4": STORAGE_BASE + "scoring_system%2Fkekka_4.png?alt=media",
+  "kekka_5": STORAGE_BASE + "scoring_system%2Fkekka_5.png?alt=media",
+  "kekka_6": STORAGE_BASE + "scoring_system%2Fmain_IPPON.png?alt=media",
 };
 
-const firebaseConfig = {
-  apiKey: "AIzaSyC-mISssQxyO67vl3JxbbBktqXoDvmGLdk",
-  authDomain: "song-fes-ippon-gp.firebaseapp.com",
-  databaseURL: "https://song-fes-ippon-gp-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "song-fes-ippon-gp",
-  storageBucket: "song-fes-ippon-gp.firebasestorage.app",
-  messagingSenderId: "727959135173",
-  appId: "1:727959135173:web:5d983f22d1164a11a6e1ac"
-};
+const firebaseConfig = window.IPPON_CONFIG.firebase;
 
 const PLAYER_IMGS = [
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_portrait%2Fportrait_player5.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_portrait%2Fportrait_player4.png?alt=media&token=9de8a04a-5719-4acc-9a25-c3f967b01d9f',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_portrait%2Fportrait_player3.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_portrait%2Fportrait_player2.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_portrait%2Fportrait_player1.png?alt=media',
-  'https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/image_question%2Fimage_question6.png?alt=media',
+  STORAGE_BASE + 'image_portrait%2Fportrait_player5.png?alt=media',
+  STORAGE_BASE + 'image_portrait%2Fportrait_player4.png?alt=media&token=9de8a04a-5719-4acc-9a25-c3f967b01d9f',
+  STORAGE_BASE + 'image_portrait%2Fportrait_player3.png?alt=media',
+  STORAGE_BASE + 'image_portrait%2Fportrait_player2.png?alt=media',
+  STORAGE_BASE + 'image_portrait%2Fportrait_player1.png?alt=media',
+  STORAGE_BASE + 'image_question%2Fimage_question6.png?alt=media',
 ];
 const sbPlayers = [
   {last: 'SAGAWA',   first: 'SO'},

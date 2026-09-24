@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
+<script src="config.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>IPPON - カメラ</title>
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -120,15 +121,9 @@ body { background: #000; height: 100dvh; overflow: hidden; position: relative; }
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
 import { getDatabase, ref, set, remove } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyC-mISssQxyO67vl3JxbbBktqXoDvmGLdk",
-  authDomain: "song-fes-ippon-gp.firebaseapp.com",
-  databaseURL: "https://song-fes-ippon-gp-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "song-fes-ippon-gp",
-  storageBucket: "song-fes-ippon-gp.firebasestorage.app",
-  messagingSenderId: "727959135173",
-  appId: "1:727959135173:web:5d983f22d1164a11a6e1ac"
-};
+const STORAGE_BASE = window.IPPON_CONFIG.storageBase;
+
+const firebaseConfig = window.IPPON_CONFIG.firebase;
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
