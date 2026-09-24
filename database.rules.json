@@ -1,0 +1,88 @@
+{
+  /* IPPON GP — Realtime Database セキュリティルール（M1 最小形）
+     設計意図・守れること / 守れないこと・デプロイ手順は docs/SECURITY_RULES.md を参照。
+     スキーマは docs/ARCHITECTURE.md §3（ルート直下フラット）に対応する。
+     すべてのクライアントは未認証（auth == null）で動く前提。 */
+  "rules": {
+    ".read": true,
+
+    "mode": {
+      ".write": "newData.exists()",
+      ".validate": "newData.isString() && newData.val().matches(/^(taiki|odai|saiten|scoreboard|agenda)$/)"
+    },
+
+    "taiki": {
+      ".write": true,
+      ".validate": "newData.val() === true"
+    },
+
+    "odai": {
+      ".write": true,
+      ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 1 && newData.val() <= 6"
+    },
+
+    "votes": {
+      /* ノードごと削除（HOST の resetVotes / モード切替）は許可。中身の一括書き込みは $seat の検証を通る */
+      ".write": "!newData.exists()",
+      "$seat": {
+        /* 新規作成のみ。既存票の上書き・個別削除は不可 */
+        ".write": "!data.exists() && newData.exists()",
+        ".validate": "$seat.matches(/^([1-9]|10)$/) && newData.val() === true"
+      }
+    },
+
+    "revealed": {
+      ".write": true,
+      ".validate": "newData.isBoolean()"
+    },
+
+    "scores": {
+      /* 削除不可。要素 5 個ちょうどの 0..99 整数配列（RTDB 上は '0'..'4' キー）のみ */
+      ".write": "newData.exists()",
+      ".validate": "newData.hasChildren(['0', '1', '2', '3', '4'])",
+      "$i": {
+        ".validate": "$i.matches(/^[0-4]$/) && newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= 99"
+      }
+    },
+
+    "agenda": {
+      ".write": true,
+      ".validate": "newData.isString() && newData.val().length <= 2048 && newData.val().matches(/^https?:\\/\\/[^ ]+$/)"
+    },
+
+    "answer_text": {
+      ".write": true,
+      ".validate": "newData.isString() && newData.val().length <= 2000"
+    },
+
+    "keep_audio": {
+      ".write": true,
+      ".validate": "newData.val() === true"
+    },
+
+    "se_master": {
+      ".write": true,
+      ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,32}$/)"
+    },
+
+    "se_trigger": {
+      ".write": "newData.exists()",
+      ".validate": "newData.hasChildren(['key', 'action', 'ts'])",
+      "key":    { ".validate": "newData.isString() && newData.val().matches(/^(laugh_[1-4]|se_cheer|se_clap)$/)" },
+      "action": { ".validate": "newData.isString() && newData.val().matches(/^(play|stop)$/)" },
+      "ts":     { ".validate": "newData.isNumber() && newData.val() > 0" },
+      "$other": { ".validate": false }
+    },
+
+    "camera_room": {
+      ".write": true,
+      ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,64}$/)"
+    },
+
+    /* 上記以外のトップレベルキーは一切書けない（ルートに .write が無いので既定で拒否だが、意図を明示） */
+    "$other": {
+      ".write": false,
+      ".validate": false
+    }
+  }
+}
