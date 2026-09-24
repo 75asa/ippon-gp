@@ -55,6 +55,15 @@ python3 -m http.server 8080   # http://localhost:8080/index.html
 - MAIN 用 PC（Chrome 推奨、音声出力を会場 PA へ）
 - HOST 用 PC またはタブレット（「音マスター」= SE 再生端末）
 
+### デプロイ（GitHub Pages）
+
+`main` に push すると [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml) が HTML と `config.js` だけを GitHub Pages に配置します。
+
+- サイト URL: **https://75asa.github.io/ippon-gp/**
+- **初回のみ**: リポジトリの Settings → Pages → Build and deployment → Source を **GitHub Actions** にしてください（未設定だとワークフローの `deploy` ジョブが失敗します）
+- デプロイされるのは `main` 上の `config.js` なので、接続先の Firebase プロジェクトは `config.js` が指しているものになります
+- Pull Request では Pages には出さず、同じ内容を `site-preview` アーティファクトとしてアップロードします（Actions の実行ページからダウンロード可）
+
 ---
 
 ## リポジトリ構成
