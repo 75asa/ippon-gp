@@ -6,6 +6,8 @@
 
 - 📍 ロードマップ: [docs/ROADMAP.md](docs/ROADMAP.md)
 - 🏗️ 現行アーキテクチャ / RTDB スキーマ: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- 🎬 本番 Runbook（機材・ネットワーク・当日手順・トラブル対応）: [docs/RUNBOOK.md](docs/RUNBOOK.md)
+- ✅ リハーサルチェックリスト: [docs/REHEARSAL.md](docs/REHEARSAL.md)
 - 💰 SaaS 化・マネタイズ設計: [docs/SAAS_DESIGN.md](docs/SAAS_DESIGN.md)
 - 🔁 本家への還元方針: [docs/UPSTREAM.md](docs/UPSTREAM.md)
 - 🤝 コントリビュート: [CONTRIBUTING.md](CONTRIBUTING.md)
