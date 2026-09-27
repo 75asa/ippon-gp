@@ -28,10 +28,10 @@
 
 | 画面 | 読む | 書く |
 |---|---|---|
-| HOST | `votes`, `scores`, `mode`, `se_master`, `se_trigger`, `agenda`, `answer_text` | ほぼ全部（下記スキーマ参照） |
+| HOST | `votes`, `scores`, `mode`, `se_master`, `se_trigger`, `agenda`, `answer_text`, `settings/players`, `settings/ipponThreshold` | ほぼ全部（下記スキーマ参照） |
 | MAIN | `mode`, `taiki`, `odai`, `votes`, `revealed`, `scores`, `agenda`, `answer_text`, `keep_audio`, `camera_room` | `agenda` の削除（動画終了時） |
 | JUDGE | `mode`, `revealed`, `votes`, `settings/judges`, `settings/ipponThreshold` | `votes/{seat} = true` |
-| ADMIN（設定画面） | `settings/judges`, `settings/ipponThreshold`, `votes` | `settings/judges`（票がある間は名前・種別のみ）、`settings/ipponThreshold`（票が無いときのみ） |
+| ADMIN（設定画面） | `settings/players`, `settings/judges`, `settings/ipponThreshold`, `votes` | `settings/judges`（票がある間は名前・種別のみ）、`settings/ipponThreshold`（票が無いときのみ）、`settings/players`（いつでも） |
 | CAM | — | `camera_room`（PeerJS ルーム ID の公開 / 削除） |
 
 ## 3. RTDB スキーマ（ルート直下、フラット）
@@ -43,7 +43,7 @@
 | `odai` | `1..6` / 削除 | 表示中のお題番号 | HOST |
 | `votes` | `{ [seat: 1..10]: true }` | 投票済み座席。キー数 = 票数 | JUDGE / HOST(削除) |
 | `revealed` | `boolean` | 「点数を公開」済みか | HOST |
-| `scores` | `number[5]` | 回答者 5 名の累積スコア。**index が UI と逆順**（`4 - pi`） | HOST |
+| `scores` | `number[5]` | 回答者 5 名の累積スコア。`scores[N-1]` が回答者 N（顔写真 `portrait_playerN`）。画面は左から回答者 5 → 1 の順なので、表示位置との変換は `web/src/shared/players.js` の `playerAt()` / `scoreIndex()` で行う | HOST |
 | `agenda` | URL string / 削除 | 投影中の画像・動画 URL。`.mp4` 等を含めば動画 | HOST / MAIN(削除) |
 | `answer_text` | JSON string `{answer,name}` / 削除 | 一般回答テキスト（現在は画像投影に置換され事実上未使用） | HOST |
 | `keep_audio` | `true`（2 秒間） | 採点モード切替時に OP 動画の音声を止めないためのフラグ | HOST |
@@ -52,13 +52,13 @@
 | `camera_room` | string / 削除 | PeerJS ルーム ID（`ippon-host-{id}`） | CAM |
 | `settings/judges` | `{ [seat: 1..N]: { name, kind: 'panel'\|'venue' } }` / 削除 | 審査員の席（N = 定員 1〜10 かつ IPPON に必要な票数以上、席番号は連番）。無ければ `web/src/shared/judges.js` の初期値 10 席。`votes` はここにある席にだけ入る | ADMIN |
 | `settings/ipponThreshold` | `1..10`（整数）/ 削除 | IPPON に必要な票数。審査員の定員以下。無ければ 6（`web/src/shared/ippon.js`） | ADMIN |
+| `settings/players` | `{ [N: 1..5]: { last, first? } }` / 削除 | 回答者の名前（上段は必須、下段は省略可）。無ければ `web/src/shared/players.js` の初期値 | ADMIN |
 
 ### 3.1 既知の設計課題
 
 - **単一ルート**: イベント（東京 / 関西）や「問」ごとの名前空間が無い。同時に 2 会場で使えない。
 - **セキュリティルールは M1 最小形のみ**: [`firebase/database.rules.json`](../firebase/database.rules.json) で「既知キーのみ・値の形・投票の上書き禁止」を検証している（意図と限界は [SECURITY_RULES.md](./SECURITY_RULES.md)）。全画面が未認証なので、正しい形なら誰でも `mode` / `scores` を書き換えられる点は残っており、HOST 認証（#36）・審査員トークン（#35）で対応する。
 - **状態遷移が暗黙的**: `showTaiki()` は `agenda` を削除 → HOST 側の `agenda` リスナーが `mode` を `previousMode` に戻す → その後 `mode='taiki'` を書く、という順序依存がある。競合するとモードが巻き戻る恐れ。
-- **`scores` の index 逆順** (`4 - pi`) が HOST / MAIN の両方に散らばっている。
 - **`answer_text` と `agenda` の二重経路**（テキスト投影 → 画像投影に切り替えた名残）。
 - **`keep_audio` の 2 秒 setTimeout** はタイミングハック。
 
