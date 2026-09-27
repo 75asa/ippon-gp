@@ -44,7 +44,7 @@
           /* 既にある席の名前・種別は投票中でも変えられる（席番号は変わらないので票はずれない） */
           "name": {
             ".write": "data.exists() && newData.exists()",
-            ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 20 && newData.val().matches(/^\\S(.*\\S)?$/)"
+            ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 20  && !newData.val().beginsWith(' ') && !newData.val().endsWith(' ') && !newData.val().beginsWith('　') && !newData.val().endsWith('　')"
           },
           "kind": {
             ".write": "data.exists() && newData.exists()",

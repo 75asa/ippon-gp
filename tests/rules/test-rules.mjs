@@ -146,6 +146,8 @@ const cases = [
   ['settings/judges 名前が空だと拒否', put('/settings/judges', { ...judges(6), 1: { name: '', kind: 'panel' } }), DENY],
   ['settings/judges 名前 21 文字は拒否', put('/settings/judges', { ...judges(6), 1: { name: 'a'.repeat(21), kind: 'panel' } }), DENY],
   ['settings/judges 名前の前後に空白があると拒否', put('/settings/judges', { ...judges(6), 1: { name: ' KIHARA', kind: 'panel' } }), DENY],
+  ['settings/judges 名前の末尾が全角スペースだと拒否', put('/settings/judges', { ...judges(6), 1: { name: 'KIHARA　', kind: 'panel' } }), DENY],
+  ['settings/judges 名前の途中の空白は許可', put('/settings/judges', { ...judges(6), 1: { name: '会場 審査員', kind: 'panel' } }), ALLOW],
   ['settings/judges 名前が数値だと拒否', put('/settings/judges', { ...judges(6), 1: { name: 1, kind: 'panel' } }), DENY],
   ['settings/judges 種別が未知だと拒否', put('/settings/judges', { ...judges(6), 1: { name: 'A', kind: 'boss' } }), DENY],
   ['settings/judges 席に余計なフィールドがあると拒否', put('/settings/judges', { ...judges(6), 1: { name: 'A', kind: 'panel', x: 1 } }), DENY],
