@@ -12,4 +12,11 @@ window.IPPON_CONFIG = {
   },
   // Firebase Storage のオブジェクト URL のベース。末尾は "/o/" で終わること
   storageBase: "https://firebasestorage.googleapis.com/v0/b/YOUR_PROJECT.firebasestorage.app/o/",
+  // CAM → MAIN の映像設定（任意。省略時は 1080p / 30fps / 6Mbps 上限 / 解像度優先）
+  camera: {
+    width: 1920, height: 1080, frameRate: 30,
+    maxBitrate: 6000000,
+    degradationPreference: "maintain-resolution",  // 帯域不足時に fps を落として解像度を守る。"balanced" / "maintain-framerate"
+    contentHint: "detail",                          // 顔のアップ = 精細さ優先。動きが多いなら "motion"
+  },
 };
