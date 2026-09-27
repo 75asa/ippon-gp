@@ -108,6 +108,14 @@ body { background: #000; display: flex; align-items: center; justify-content: ce
 .sb-tube-body.on { background: linear-gradient(90deg, #c8a800 0%, #ffe800 25%, #fff5a0 45%, #ffee00 55%, #ffe000 75%, #c8a800 100%); border-left: 1px solid #f5d800; border-right: 1px solid #f5d800; box-shadow: inset 0 0 20px rgba(255,255,150,0.6), 0 0 8px rgba(255,230,0,0.4); }
 .sb-tube-label { writing-mode: vertical-rl; text-orientation: mixed; font-size: 16px; font-weight: 900; letter-spacing: 0.15em; user-select: none; color: #000; }
 .sb-tube-body.on .sb-tube-label { color: #000; }
+#camera-settings-btn { position: absolute; top: 16px; right: 120px; background: rgba(255,255,255,0.15); border: none; color: white; font-size: 13px; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-family: sans-serif; z-index: 100; }
+#camera-settings { position: absolute; top: 56px; right: 16px; z-index: 101; display: none; background: rgba(20,20,20,0.95); color: #eee; font-family: sans-serif; font-size: 13px; padding: 14px 16px; border-radius: 8px; width: 360px; box-shadow: 0 8px 24px rgba(0,0,0,0.6); }
+#camera-settings.open { display: block; }
+#camera-settings h3 { font-size: 12px; letter-spacing: 2px; color: #d4a017; margin-bottom: 10px; }
+#camera-settings label { display: block; margin: 6px 0; cursor: pointer; }
+#camera-settings select { width: 100%; margin: 6px 0 10px; padding: 6px; background: #111; color: #eee; border: 1px solid #444; border-radius: 4px; }
+#camera-settings .hint { color: #999; font-size: 11px; line-height: 1.5; }
+#camera-settings .status { margin-top: 8px; color: #8f8; font-size: 12px; }
 #fullscreen-btn { position: absolute; top: 16px; right: 16px; background: rgba(255,255,255,0.15); border: none; color: white; font-size: 13px; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-family: sans-serif; z-index: 100; }
 #agenda-img { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: fill; display: none; z-index: 50; }
 #agenda-video { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: fill; display: none; z-index: 50; background: #000; }
@@ -235,6 +243,15 @@ body { background: #000; display: flex; align-items: center; justify-content: ce
 <div id="confetti-layer"></div>
 <img id="score-badge" src="" alt="">
 <button id="fullscreen-btn" onclick="goFullscreen()">⛶ 全画面</button>
+<button id="camera-settings-btn" onclick="document.getElementById('camera-settings').classList.toggle('open')">🎥 カメラ</button>
+<div id="camera-settings">
+  <h3>CAMERA SOURCE</h3>
+  <label><input type="radio" name="camera-source" value="webrtc"> WebRTC（CAM スマホから Wi‑Fi 配信）</label>
+  <label><input type="radio" name="camera-source" value="local"> ローカルデバイス（HDMI キャプチャ / 連係カメラ / Web カメラ）</label>
+  <select id="camera-device"></select>
+  <div class="hint">ローカルデバイスは Wi‑Fi を通さないので画質が落ちません。スマホ → HDMI アダプタ → USB キャプチャ → この PC、または Mac の連係カメラ。選択は保存され、次回起動時に自動で使われます。</div>
+  <div class="status" id="camera-settings-status"></div>
+</div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
@@ -267,10 +284,106 @@ function connectCamera(roomId) {
   cameraPeer.on('error', () => { cameraConnectedRoomId = null; });
 }
 
+function disconnectCamera() {
+  if (cameraPeer) { try { cameraPeer.destroy(); } catch(e) {} }
+  cameraPeer = null; cameraConnectedRoomId = null;
+}
+
 function showCameraVideo(show) {
   document.getElementById('camera-video').style.display = show ? 'block' : 'none';
 }
 // ===== PeerJS カメラ受信 ここまで =====
+
+// ===== カメラソース切替（WebRTC / ローカルデバイス）=====
+// ローカルデバイス = HDMI キャプチャ・連係カメラ・Web カメラ。Wi‑Fi と WebRTC を通さないので画質が落ちない。
+// 設定は localStorage に保存。URL の ?source=local&device=<deviceId> でも指定できる（リハーサル・自動起動用）
+const CAM_SOURCE_KEY = 'ippon.cameraSource';
+const CAM_DEVICE_KEY = 'ippon.cameraDeviceId';
+const urlParams = new URLSearchParams(location.search);
+let cameraSource = urlParams.get('source') || localStorage.getItem(CAM_SOURCE_KEY) || 'webrtc';
+let cameraDeviceId = urlParams.get('device') || localStorage.getItem(CAM_DEVICE_KEY) || '';
+let localStream = null;
+let lastCameraRoom = null;
+
+const settingsStatus = (t, ok = true) => {
+  const el = document.getElementById('camera-settings-status');
+  el.textContent = t; el.style.color = ok ? '#8f8' : '#f88';
+};
+
+async function listVideoDevices() {
+  const sel = document.getElementById('camera-device');
+  const devices = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+  sel.innerHTML = '';
+  devices.forEach((d, i) => {
+    const opt = document.createElement('option');
+    opt.value = d.deviceId; opt.textContent = d.label || ('カメラ ' + (i + 1));
+    if (d.deviceId === cameraDeviceId) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  if (!devices.length) settingsStatus('映像入力デバイスが見つかりません', false);
+  return devices;
+}
+
+async function startLocalCamera() {
+  stopLocalCamera();
+  const v = document.getElementById('camera-video');
+  const c = window.IPPON_CONFIG.camera || {};
+  const video = { width: { ideal: c.width || 1920 }, height: { ideal: c.height || 1080 }, frameRate: { ideal: c.frameRate || 30 } };
+  if (cameraDeviceId) video.deviceId = { exact: cameraDeviceId };
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+  } catch(e) {
+    if (cameraDeviceId) {  // 保存済みデバイスが抜かれている等。既定デバイスで再試行
+      cameraDeviceId = '';
+      try { localStream = await navigator.mediaDevices.getUserMedia({ video: { width: video.width, height: video.height }, audio: false }); }
+      catch(e2) { settingsStatus('カメラを開けません: ' + e2.name, false); return; }
+    } else { settingsStatus('カメラを開けません: ' + e.name, false); return; }
+  }
+  v.srcObject = localStream;
+  const st = localStream.getVideoTracks()[0].getSettings();
+  const label = (await listVideoDevices()).find(d => d.deviceId === st.deviceId);
+  settingsStatus(`ローカル: ${label ? label.label : ''} ${st.width}×${st.height}`);
+}
+
+function stopLocalCamera() {
+  if (localStream) localStream.getTracks().forEach(t => t.stop());
+  localStream = null;
+}
+
+async function applyCameraSource() {
+  document.querySelectorAll('input[name="camera-source"]').forEach(r => { r.checked = r.value === cameraSource; });
+  document.getElementById('camera-device').disabled = cameraSource !== 'local';
+  const v = document.getElementById('camera-video');
+  if (cameraSource === 'local') {
+    disconnectCamera();
+    await startLocalCamera();
+  } else {
+    stopLocalCamera();
+    v.srcObject = null;
+    settingsStatus(lastCameraRoom ? 'WebRTC: CAM に接続中' : 'WebRTC: CAM の配信待ち');
+    if (lastCameraRoom) connectCamera(lastCameraRoom);
+  }
+}
+
+document.querySelectorAll('input[name="camera-source"]').forEach(r => r.addEventListener('change', () => {
+  cameraSource = r.value;
+  localStorage.setItem(CAM_SOURCE_KEY, cameraSource);
+  applyCameraSource();
+}));
+document.getElementById('camera-device').addEventListener('change', e => {
+  cameraDeviceId = e.target.value;
+  localStorage.setItem(CAM_DEVICE_KEY, cameraDeviceId);
+  if (cameraSource === 'local') startLocalCamera();
+});
+document.getElementById('camera-settings-btn').addEventListener('click', () => {
+  // パネルを開いたときにデバイス一覧を更新（ラベルは一度カメラ許可を得ないと空になる）
+  if (document.getElementById('camera-settings').classList.contains('open')) listVideoDevices();
+});
+if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+  navigator.mediaDevices.addEventListener('devicechange', () => { if (document.getElementById('camera-settings').classList.contains('open')) listVideoDevices(); });
+}
+applyCameraSource();
+// ===== カメラソース切替 ここまで =====
 
 const images = {
   "taiki": STORAGE_BASE + "mp3_odai%2Fmain_taiki.png?alt=media&token=c549f99f-6d55-42c7-a3eb-280146b051c0",
@@ -358,8 +471,13 @@ let currentMode = '';
 
 window.goFullscreen = () => {
   document.documentElement.requestFullscreen();
-  document.getElementById('fullscreen-btn').style.display = 'none';
 };
+document.addEventListener('fullscreenchange', () => {
+  const fs = !!document.fullscreenElement;
+  document.getElementById('fullscreen-btn').style.display = fs ? 'none' : '';
+  document.getElementById('camera-settings-btn').style.display = fs ? 'none' : '';
+  if (fs) document.getElementById('camera-settings').classList.remove('open');
+});
 
 let ipponTriggered = false;
 let imageQueue = [];
@@ -464,10 +582,12 @@ function updateUI() {
   }
 }
 
-// camera_room監視
+// camera_room監視（ソースが WebRTC のときだけ接続する）
 onValue(ref(db, 'camera_room'), (snapshot) => {
   const roomId = snapshot.val();
-  if (roomId) {
+  lastCameraRoom = roomId || null;
+  if (roomId && cameraSource === 'webrtc') {
+    settingsStatus('WebRTC: CAM に接続中');
     connectCamera(roomId);
   }
 });
