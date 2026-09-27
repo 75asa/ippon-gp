@@ -52,6 +52,9 @@ const put = (path, body) => ({ method: 'PUT', path, body });
 const patch = (path, body) => ({ method: 'PATCH', path, body });
 const del = (path) => ({ method: 'DELETE', path });
 
+// settings/players の値を作る（回答者 1..5）
+const players = () => Object.fromEntries([1, 2, 3, 4, 5].map((n) => [String(n), { last: `P${n}`, first: `F${n}` }]));
+
 // settings/judges の値を作る（席 1..n、7 席目以降は会場審査員）
 const judges = (n) => Object.fromEntries(
   Array.from({ length: n }, (_, i) => [String(i + 1), { name: `J${i + 1}`, kind: i >= 6 ? 'venue' : 'panel' }]),
@@ -205,6 +208,23 @@ const cases = [
   ['審査員 8 席のとき票数 9 は拒否', put('/settings/ipponThreshold', 9), DENY],
   ['後片付け: 票数を消す', del('/settings/ipponThreshold'), ALLOW],
   ['後片付け: 審査員の設定を消す', del('/settings/judges'), ALLOW],
+
+  // settings/players（回答者の名前）
+  ['settings/players 5 人は許可', put('/settings/players', players()), ALLOW],
+  ['settings/players 4 人は拒否', put('/settings/players', { ...players(), 5: undefined }), DENY],
+  ['settings/players 回答者 6 は拒否', put('/settings/players', { ...players(), 6: { last: 'X' } }), DENY],
+  ['settings/players 下段の名前は省略できる', put('/settings/players', { ...players(), 1: { last: 'SAGAWA' } }), ALLOW],
+  ['settings/players 上段の名前が無いと拒否', put('/settings/players', { ...players(), 1: { first: 'SO' } }), DENY],
+  ['settings/players 上段の名前が空だと拒否', put('/settings/players', { ...players(), 1: { last: '' } }), DENY],
+  ['settings/players 名前 21 文字は拒否', put('/settings/players', { ...players(), 1: { last: 'a'.repeat(21) } }), DENY],
+  ['settings/players 名前の前後に空白があると拒否', put('/settings/players', { ...players(), 1: { last: 'SAGAWA ' } }), DENY],
+  ['settings/players 余計なフィールドは拒否', put('/settings/players', { ...players(), 1: { last: 'A', photo: 'x' } }), DENY],
+  ['回答者 3 の名前だけ変えられる', put('/settings/players/3/last', 'TOKUMOTO'), ALLOW],
+  ['回答者 3 を消すのは拒否（5 人そろっていない）', del('/settings/players/3'), DENY],
+  ['votes/1 に投票（回答者の検証の続き）', put('/votes/1', true), ALLOW],
+  ['投票中でも回答者の名前は変えられる', put('/settings/players/3/last', 'TOKUMOTO2'), ALLOW],
+  ['後片付け: votes を消す（回答者）', del('/votes'), ALLOW],
+  ['settings/players を消せる（初期値に戻す）', del('/settings/players'), ALLOW],
 
   // 読み取り
   ['ルートの読み取りは誰でも可', { method: 'GET', path: '/' }, ALLOW],

@@ -67,6 +67,9 @@ ol { list-style: none; display: flex; flex-direction: column; gap: 8px; }
 .status { font-size: 13px; font-weight: 700; min-height: 1.6em; }
 .status.ok { color: var(--ok); }
 .status.error { color: var(--error); }
+.player { display: grid; grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: center; }
+.player input { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: #fff; }
+.player input[aria-invalid="true"] { border-color: var(--error); }
 .stepper { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .stepper input { width: 96px; text-align: center; font-family: 'Bebas Neue', sans-serif; font-size: 34px; line-height: 1; border: 1px solid var(--line); border-radius: 12px; padding: 6px 8px 2px; background: #fff; font-variant-numeric: tabular-nums; }
 .stepper .icon { width: 44px; height: 44px; font-size: 20px; }
@@ -86,6 +89,22 @@ ol { list-style: none; display: flex; flex-direction: column; gap: 8px; }
     <div class="tagline">SETTINGS</div>
     <a class="back" href="../">← ランチャーに戻る</a>
   </header>
+
+  <section class="card" aria-labelledby="h-players">
+    <div class="card-head">
+      <h1 id="h-players">PLAYER <small>回答者</small></h1>
+      <span class="pill" id="p-state">読み込み中…</span>
+    </div>
+    <p class="help">HOST のスコア欄と MAIN のスコアボードに出る名前です。番号は顔写真（portrait_player1〜5）とスコアに対応していて、画面では左から 5 → 1 の順に並びます。上段は必須、下段（スコアボードの 2 行目）は省略できます。名前はいつでも変えられます。</p>
+    <ol id="p-list" aria-label="回答者"></ol>
+    <div class="errors" id="p-errors" role="alert"></div>
+    <div class="foot">
+      <button class="btn link" id="p-reset" type="button">初期値に戻す</button>
+      <button class="btn ghost push" id="p-discard" type="button">変更を取り消す</button>
+      <button class="btn primary" id="p-save" type="button">保存する</button>
+    </div>
+    <p class="status" id="p-status" role="status" aria-live="polite"></p>
+  </section>
 
   <section class="card" aria-labelledby="h-judges">
     <div class="card-head">
@@ -136,6 +155,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/fireba
 import { getDatabase, ref, set, update, remove, onValue } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
 import { JUDGES_PATH, MIN_SEATS, MAX_SEATS, NAME_MAX, KINDS, judgesFromValue, judgesToRecord, validateJudges } from "../src/shared/judges.js";
 import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue } from "../src/shared/ippon.js";
+import { PLAYERS_PATH, NAME_MAX as PLAYER_NAME_MAX, playersFromValue, playersToRecord, validatePlayers } from "../src/shared/players.js";
 
 const app = initializeApp(window.IPPON_CONFIG.firebase);
 const db = getDatabase(app);
@@ -350,13 +370,97 @@ $('add').addEventListener('click', () => {
 $('save').addEventListener('click', save);
 $('discard').addEventListener('click', () => { draft = clone(remote.judges); setStatus(''); render(); });
 $('reset').addEventListener('click', resetToDefault);
+
+/* ---- 回答者 ---- */
+let playersRemote = null;
+let playersDraft = [];
+let playersSaving = false;
+let playersResetArmedUntil = 0;
+const clonePlayers = (list) => list.map(({ last, first }) => ({ last, first }));
+const playersDirty = () => playersRemote && JSON.stringify(playersDraft) !== JSON.stringify(clonePlayers(playersRemote.players));
+
+function setPStatus(text, kind = '') {
+  const el = $('p-status');
+  el.textContent = text;
+  el.className = 'status' + (kind ? ' ' + kind : '');
+}
+
+function renderPlayers() {
+  if (!playersRemote) return;
+  $('p-list').replaceChildren(...playersDraft.map((p, i) => {
+    const li = document.createElement('li');
+    li.className = 'player';
+    const num = document.createElement('span'); num.className = 'num'; num.textContent = i + 1; num.setAttribute('aria-hidden', 'true');
+    const field = (key, label) => {
+      const input = document.createElement('input');
+      input.type = 'text'; input.value = p[key]; input.maxLength = PLAYER_NAME_MAX;
+      input.id = `player-${i + 1}-${key}`;
+      input.placeholder = key === 'first' ? '（省略可）' : '';
+      input.setAttribute('aria-label', `回答者 ${i + 1} の${label}`);
+      input.addEventListener('input', () => { playersDraft[i][key] = input.value; renderPlayersMeta(); });
+      return input;
+    };
+    li.append(num, field('last', '名前（上段）'), field('first', '名前（下段）'));
+    return li;
+  }));
+  renderPlayersMeta();
+}
+
+function renderPlayersMeta() {
+  const dirty = playersDirty();
+  const pill = $('p-state');
+  if (playersRemote.isDefault && !dirty) { pill.textContent = '初期値（未保存）'; pill.className = 'pill'; }
+  else if (dirty) { pill.textContent = '未保存の変更あり'; pill.className = 'pill dirty'; }
+  else { pill.textContent = '保存済み'; pill.className = 'pill saved'; }
+  playersDraft.forEach((p, i) => $(`player-${i + 1}-last`)?.setAttribute('aria-invalid', String(!p.last.trim())));
+  const errors = validatePlayers(playersDraft);
+  $('p-errors').replaceChildren(...errors.map(e => { const d = document.createElement('div'); d.textContent = e; return d; }));
+  $('p-save').disabled = playersSaving || !dirty || errors.length > 0;
+  $('p-discard').disabled = playersSaving || !dirty;
+  $('p-reset').disabled = playersSaving || playersRemote.isDefault;
+  if (Date.now() > playersResetArmedUntil) $('p-reset').textContent = '初期値に戻す';
+}
+
+async function writePlayers(value) {
+  playersSaving = true; renderPlayersMeta(); setPStatus('保存しています…');
+  try {
+    if (value === null) await remove(ref(db, PLAYERS_PATH));
+    else await set(ref(db, PLAYERS_PATH), value);
+    setPStatus(value === null ? '初期値に戻しました。' : '保存しました。HOST と MAIN にすぐ反映されます。', 'ok');
+  } catch (e) {
+    setPStatus(`保存できませんでした。通信状態を確認して、もう一度保存してください。（${e.code || e.message}）`, 'error');
+  } finally {
+    playersSaving = false; renderPlayersMeta();
+  }
+}
+
+$('p-save').addEventListener('click', () => { if (!validatePlayers(playersDraft).length) writePlayers(playersToRecord(playersDraft)); });
+$('p-discard').addEventListener('click', () => { playersDraft = clonePlayers(playersRemote.players); setPStatus(''); renderPlayers(); });
+$('p-reset').addEventListener('click', () => {
+  // 誤操作防止のため 2 回押しで実行する
+  if (Date.now() > playersResetArmedUntil) {
+    playersResetArmedUntil = Date.now() + 4000;
+    $('p-reset').textContent = 'もう一度押すと初期値に戻します';
+    setTimeout(renderPlayersMeta, 4100);
+    return;
+  }
+  playersResetArmedUntil = 0;
+  writePlayers(null);
+});
+
+onValue(ref(db, PLAYERS_PATH), (snap) => {
+  const wasDirty = playersDirty();
+  playersRemote = playersFromValue(snap.val());
+  if (!wasDirty || playersSaving) { playersDraft = clonePlayers(playersRemote.players); renderPlayers(); }
+  else { setPStatus('他の端末で回答者の設定が変わりました。「変更を取り消す」で最新を読み込めます。', 'error'); renderPlayersMeta(); }
+});
 $('t-input').addEventListener('input', () => { thresholdDraft = $('t-input').value === '' ? NaN : Number($('t-input').value); renderThreshold(); });
 $('t-minus').addEventListener('click', () => { thresholdDraft -= 1; renderThreshold(); });
 $('t-plus').addEventListener('click', () => { thresholdDraft += 1; renderThreshold(); });
 $('t-save').addEventListener('click', () => { if (!thresholdErrors().length) writeThreshold(thresholdDraft); });
 $('t-discard').addEventListener('click', () => { thresholdDraft = thresholdRemote; setTStatus(''); renderThreshold(); });
 $('t-reset').addEventListener('click', () => writeThreshold(null));
-window.addEventListener('beforeunload', (e) => { if (isDirty() || (loaded.threshold && thresholdDraft !== thresholdRemote)) e.preventDefault(); });
+window.addEventListener('beforeunload', (e) => { if (isDirty() || playersDirty() || (loaded.threshold && thresholdDraft !== thresholdRemote)) e.preventDefault(); });
 
 onValue(ref(db, JUDGES_PATH), (snap) => {
   const wasDirty = remote && isDirty();

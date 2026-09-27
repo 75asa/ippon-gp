@@ -59,6 +59,17 @@
         ".write": "!root.child('votes').exists() && (newData.exists() || !root.child('settings/judges').exists() || root.child('settings/judges').hasChild('6'))",
         ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 1 && newData.val() <= 10 && (newData.val() != 1 || !root.child('settings/judges').exists() || root.child('settings/judges').hasChild('1')) && (newData.val() != 2 || !root.child('settings/judges').exists() || root.child('settings/judges').hasChild('2')) && (newData.val() != 3 || !root.child('settings/judges').exists() || root.child('settings/judges').hasChild('3')) && (newData.val() != 4 || !root.child('settings/judges').exists() || root.child('settings/judges').hasChild('4')) && (newData.val() != 5 || !root.child('settings/judges').exists() || root.child('settings/judges').hasChild('5')) && (newData.val() != 6 || !root.child('settings/judges').exists() || root.child('settings/judges').hasChild('6')) && (newData.val() != 7 || !root.child('settings/judges').exists() || root.child('settings/judges').hasChild('7')) && (newData.val() != 8 || !root.child('settings/judges').exists() || root.child('settings/judges').hasChild('8')) && (newData.val() != 9 || !root.child('settings/judges').exists() || root.child('settings/judges').hasChild('9')) && (newData.val() != 10 || !root.child('settings/judges').exists() || root.child('settings/judges').hasChild('10'))"
       },
+      "players": {
+        /* 回答者の名前（キーは回答者番号 1..5 = portrait_playerN = scores[N-1]）。採点に影響しないので投票中でも変えられる */
+        ".write": true,
+        ".validate": "newData.hasChildren(['1', '2', '3', '4', '5'])",
+        "$n": {
+          ".validate": "$n.matches(/^[1-5]$/) && newData.hasChild('last')",
+          "last": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 20 && !newData.val().beginsWith(' ') && !newData.val().endsWith(' ') && !newData.val().beginsWith('　') && !newData.val().endsWith('　')" },
+          "first": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 20 && !newData.val().beginsWith(' ') && !newData.val().endsWith(' ') && !newData.val().beginsWith('　') && !newData.val().endsWith('　')" },
+          "$other": { ".validate": false }
+        }
+      },
       "$other": {
         ".write": false,
         ".validate": false
