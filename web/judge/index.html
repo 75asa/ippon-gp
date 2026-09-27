@@ -62,6 +62,7 @@ body { background: #000; font-family: sans-serif; display: flex; flex-direction:
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
 import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
+import { JUDGES_PATH, judgesFromValue } from "../src/shared/judges.js";
 
 const STORAGE_BASE = window.IPPON_CONFIG.storageBase;
 
@@ -71,11 +72,9 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const votesRef = ref(db, 'votes');
 
-const seatNames = {
-  1: 'KIHARA', 2: 'HARADA', 3: 'SHIBUTANI',
-  4: 'KIYOSHIMA', 5: 'NAKAMURA', 6: 'HAMADA',
-  7: '会場審査員1', 8: '会場審査員2', 9: '会場審査員3', 10: '会場審査員4',
-};
+// 席は設定画面（admin/）で編集する settings/judges から作る。設定が無ければ初期値の 10 席
+let judges = [];
+let seatNames = {};
 
 let currentVotes = {};
 let isRevealed = false;
@@ -84,12 +83,15 @@ let selectedSeat = null;
 let previousView = 'select';
 
 const selectGrid = document.getElementById('select-grid');
-for (let i = 1; i <= 10; i++) {
-  const btn = document.createElement('button');
-  btn.className = 'select-btn' + (i >= 7 ? ' small' : '');
-  btn.textContent = seatNames[i];
-  btn.onclick = () => selectSeat(i);
-  selectGrid.appendChild(btn);
+function renderSelect() {
+  selectGrid.innerHTML = '';
+  for (const j of judges) {
+    const btn = document.createElement('button');
+    btn.className = 'select-btn' + (j.kind === 'venue' ? ' small' : '');
+    btn.textContent = j.name;
+    btn.onclick = () => selectSeat(j.seat);
+    selectGrid.appendChild(btn);
+  }
 }
 
 function selectSeat(seat) {
@@ -144,7 +146,7 @@ function renderAll(votes) {
   const grid = document.getElementById('grid');
   grid.innerHTML = '';
   const isIppon = Object.keys(votes).length >= 6;
-  for (let i = 1; i <= 10; i++) {
+  for (const { seat: i } of judges) {
     const btn = document.createElement('button');
     const isVoted = votes[i] === true;
     const label = seatNames[i];
@@ -167,6 +169,20 @@ function renderAll(votes) {
   }
 }
 
+onValue(ref(db, JUDGES_PATH), (snapshot) => {
+  judges = judgesFromValue(snapshot.val()).judges;
+  seatNames = Object.fromEntries(judges.map(j => [j.seat, j.name]));
+  renderSelect();
+  if (selectedSeat && !seatNames[selectedSeat]) {
+    // 自分の席が設定から消えたら席選択に戻す
+    selectedSeat = null;
+    showView('select');
+  } else if (selectedSeat) {
+    document.getElementById('vote-name').textContent = seatNames[selectedSeat];
+  }
+  updateVoteBtn();
+  renderAll(currentVotes);
+});
 onValue(ref(db, 'mode'), (snapshot) => {
   isSaitenMode = snapshot.val() === 'saiten';
   updateVoteBtn();
