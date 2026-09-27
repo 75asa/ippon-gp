@@ -17,6 +17,10 @@ body { background: #000; font-family: sans-serif; display: flex; flex-direction:
 .select-btn { background: #1a1a1a; border: 2px solid #d4a017; border-radius: 10px; color: #d4a017; font-size: 15px; font-weight: 900; padding: 22px 0; cursor: pointer; text-align: center; transition: background 0.1s; }
 .select-btn.small { font-size: 12px; }
 .select-btn:active { background: #2a2000; }
+.select-btn.taken { border-color: #444; color: #666; background: #111; }
+.select-btn.taken small { display: block; font-size: 10px; font-weight: 700; margin-top: 4px; letter-spacing: 1px; }
+.select-btn.pressing { background: #2a2000; border-color: #f5c400; }
+.seat-msg { font-size: 12px; color: #d4a017; font-weight: 700; text-align: center; min-height: 1.5em; margin-bottom: 10px; }
 
 #view-vote { width: 100%; max-width: 320px; display: none; flex-direction: column; align-items: center; gap: 16px; }
 .vote-btn { width: 100%; border: none; border-radius: 12px; font-size: 26px; font-weight: 900; padding: 70px 0; cursor: pointer; text-align: center; transition: opacity 0.1s; }
@@ -42,6 +46,7 @@ body { background: #000; font-family: sans-serif; display: flex; flex-direction:
 <div id="view-select">
   <div class="logo">SONG OGIRI GRAND PRIX</div>
   <div class="select-title">審査員選択</div>
+  <div class="seat-msg" id="seat-msg" role="status" aria-live="polite"></div>
   <div class="select-grid" id="select-grid"></div>
 </div>
 
@@ -61,9 +66,10 @@ body { background: #000; font-family: sans-serif; display: flex; flex-direction:
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
-import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
+import { getDatabase, ref, set, onValue, remove, runTransaction, onDisconnect, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
 import { JUDGES_PATH, judgesFromValue } from "../src/shared/judges.js";
 import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue } from "../src/shared/ippon.js";
+import { SEATS_PATH, SEAT_KEY, loadDeviceId, seatState, claimUpdate, releaseUpdate } from "../src/shared/seats.js";
 
 const STORAGE_BASE = window.IPPON_CONFIG.storageBase;
 
@@ -85,20 +91,109 @@ let isSaitenMode = false;
 let selectedSeat = null;
 let previousView = 'select';
 
+// 座席ロック（#25）: seats/{seat} = { device, at }。1 席 1 台。端末が消えると onDisconnect で外れる
+const storage = (() => { try { return window.localStorage; } catch { return null; } })();
+const DEVICE = loadDeviceId(storage);
+let claims = {};
+let judgesLoaded = false;
+let claimsLoaded = false;
+let restored = false;
+let reclaiming = false;
+const LONG_PRESS_MS = 1200;
+
+function saveSeat(seat) {
+  try { seat ? storage?.setItem(SEAT_KEY, String(seat)) : storage?.removeItem(SEAT_KEY); } catch {}
+}
+function loadSeat() {
+  try { return Number(storage?.getItem(SEAT_KEY)) || null; } catch { return null; }
+}
+function setSeatMsg(text) {
+  document.getElementById('seat-msg').textContent = text;
+}
+
+// 席を取る。force = 使用中の席を引き継ぐ（前の端末の席を外してから取る）
+async function claimSeat(seat, { force = false } = {}) {
+  const seatRef = ref(db, `${SEATS_PATH}/${seat}`);
+  try {
+    if (force) await remove(seatRef);
+    const res = await runTransaction(seatRef, (cur) => claimUpdate(cur, DEVICE, serverTimestamp()));
+    if (!res.committed) {
+      setSeatMsg(`${seatNames[seat] || seat} は別の端末で使われています。長押しで引き継げます`);
+      return false;
+    }
+    await onDisconnect(seatRef).remove();
+    return true;
+  } catch (e) {
+    setSeatMsg('席を取れませんでした。通信状態を確認して、もう一度選んでください');
+    return false;
+  }
+}
+
+// 自分の席を外す（他の端末に引き継がれていたら何もしない）
+async function releaseSeat(seat) {
+  const seatRef = ref(db, `${SEATS_PATH}/${seat}`);
+  try {
+    await onDisconnect(seatRef).cancel();
+    await runTransaction(seatRef, (cur) => releaseUpdate(cur, DEVICE));
+  } catch {}
+}
+
+// 使用中の席を長押しで引き継ぐためのボタン
+function holdToTake(btn, onHold) {
+  let timer = null;
+  const cancel = () => { clearTimeout(timer); timer = null; btn.classList.remove('pressing'); };
+  btn.addEventListener('pointerdown', () => {
+    btn.classList.add('pressing');
+    timer = setTimeout(() => { cancel(); onHold(); }, LONG_PRESS_MS);
+  });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) btn.addEventListener(ev, cancel);
+  btn.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+
+// 前回の席に戻る（再読み込み時）。席の設定と座席ロックの両方が読めてから 1 回だけ
+function maybeRestore() {
+  if (restored || !judgesLoaded || !claimsLoaded) return;
+  restored = true;
+  const saved = loadSeat();
+  if (!saved) return;
+  if (!seatNames[saved]) { saveSeat(null); return; }
+  if (seatState(claims, saved, DEVICE) === 'taken') {
+    saveSeat(null);
+    setSeatMsg(`前回の席（${seatNames[saved]}）は別の端末で使われています`);
+    return;
+  }
+  selectSeat(saved);
+}
+
 const selectGrid = document.getElementById('select-grid');
 function renderSelect() {
   selectGrid.innerHTML = '';
   for (const j of judges) {
     const btn = document.createElement('button');
-    btn.className = 'select-btn' + (j.kind === 'venue' ? ' small' : '');
+    const taken = seatState(claims, j.seat, DEVICE) === 'taken';
+    btn.className = 'select-btn' + (j.kind === 'venue' ? ' small' : '') + (taken ? ' taken' : '');
     btn.textContent = j.name;
-    btn.onclick = () => selectSeat(j.seat);
+    if (taken) {
+      const note = document.createElement('small');
+      note.textContent = '使用中・長押しで引き継ぐ';
+      btn.appendChild(note);
+      btn.onclick = () => setSeatMsg(`${j.name} は別の端末で使われています。長押しで引き継げます`);
+      holdToTake(btn, () => selectSeat(j.seat, { force: true }));
+    } else {
+      btn.onclick = () => selectSeat(j.seat);
+    }
     selectGrid.appendChild(btn);
   }
 }
 
-function selectSeat(seat) {
+async function selectSeat(seat, opts) {
+  const prev = selectedSeat;
+  selectedSeat = null; // 取り直しの間に「席が外れた → 取り直す」が走らないように
+  if (prev && prev !== seat) await releaseSeat(prev);
+  if (!(await claimSeat(seat, opts))) { saveSeat(null); showView('select'); return; }
   selectedSeat = seat;
+  saveSeat(seat);
+  setSeatMsg('');
   document.getElementById('vote-name').textContent = seatNames[seat];
   showView('vote');
   updateVoteBtn();
@@ -113,7 +208,13 @@ function showView(view) {
   else if (view === 'all') document.getElementById('view-all').style.display = 'flex';
 }
 
-window.goBack = () => showView('select');
+window.goBack = () => {
+  const seat = selectedSeat;
+  selectedSeat = null;
+  saveSeat(null);
+  if (seat) releaseSeat(seat);
+  showView('select');
+};
 window.showAll = () => { previousView = selectedSeat ? 'vote' : 'select'; showView('all'); renderAll(currentVotes); };
 window.goBackFromAll = () => showView(previousView);
 
@@ -176,15 +277,47 @@ onValue(ref(db, JUDGES_PATH), (snapshot) => {
   judges = judgesFromValue(snapshot.val()).judges;
   seatNames = Object.fromEntries(judges.map(j => [j.seat, j.name]));
   renderSelect();
+  judgesLoaded = true;
   if (selectedSeat && !seatNames[selectedSeat]) {
-    // 自分の席が設定から消えたら席選択に戻す
+    // 自分の席が設定から消えたら、席を外して席選択に戻す
+    const seat = selectedSeat;
     selectedSeat = null;
+    saveSeat(null);
+    releaseSeat(seat);
+    setSeatMsg('席の設定が変わりました。席を選び直してください');
     showView('select');
   } else if (selectedSeat) {
     document.getElementById('vote-name').textContent = seatNames[selectedSeat];
   }
   updateVoteBtn();
   renderAll(currentVotes);
+  maybeRestore();
+});
+onValue(ref(db, SEATS_PATH), (snapshot) => {
+  claims = snapshot.val() || {};
+  claimsLoaded = true;
+  if (selectedSeat) {
+    const state = seatState(claims, selectedSeat, DEVICE);
+    if (state === 'taken') {
+      // 別の端末が長押しで引き継いだ
+      const seat = selectedSeat;
+      selectedSeat = null;
+      saveSeat(null);
+      onDisconnect(ref(db, `${SEATS_PATH}/${seat}`)).cancel().catch(() => {});
+      setSeatMsg(`${seatNames[seat] || seat} は別の端末に引き継がれました`);
+      showView('select');
+    } else if (state === 'free' && !reclaiming) {
+      // 通信断で onDisconnect が走った・誰かに外された等で席が空いた → 取り直す
+      reclaiming = true;
+      claimSeat(selectedSeat).finally(() => { reclaiming = false; });
+    }
+  }
+  renderSelect();
+  maybeRestore();
+});
+// 再接続したら onDisconnect を登録し直す（切断時に 1 回実行されると消えるため）
+onValue(ref(db, '.info/connected'), (snapshot) => {
+  if (snapshot.val() === true && selectedSeat && !reclaiming) claimSeat(selectedSeat);
 });
 onValue(ref(db, THRESHOLD_PATH), (snapshot) => {
   threshold = thresholdFromValue(snapshot.val());
