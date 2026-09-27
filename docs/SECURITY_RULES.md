@@ -47,13 +47,14 @@ HOST 認証は [#36](https://github.com/75asa/ippon-gp/issues/36)、審査員ト
 `.firebaserc` はリポジトリに含めていません（プロジェクト ID はフォークごとに違うため）。`--project` で毎回指定するか、`firebase use` で紐付けてください。
 
 ```bash
-npm i -g firebase-tools        # 未導入なら
-firebase login
-firebase deploy --only database --project <your-project-id>
-# もしくは一度 firebase use <your-project-id> しておけば --project は省略可
+# firebase-tools は Node 20 / 22 / 24 で動く（Node 25 では起動しない）。mise があれば Node を指定して実行できる
+mise exec node@24 -- npx --yes firebase-tools@15.31.0 login --reauth
+mise exec node@24 -- npx --yes firebase-tools@15.31.0 deploy --only database,storage --project song-ogiri-gp
 ```
 
-`firebase.json` の `database.rules` が `firebase/database.rules.json` を指しているので、これだけで RTDB のルールが置き換わります。
+- 本番のプロジェクトは `song-ogiri-gp`（RTDB は asia-southeast1、Storage は米国）。フォークして自分のプロジェクトで使う場合は `--project` を差し替える。
+- `firebase.json` の `database.rules` / `storage.rules` が `firebase/database.rules.json` / `firebase/storage.rules` を指しているので、これだけで両方のルールが置き換わります。
+- Storage のルールは「誰でも読める・誰も書けない」。素材の追加は `scripts/migrate-storage.mjs`（旧プロジェクトからのコピー）か、コンソール / gsutil で行います。
 Firebase コンソールの「Realtime Database → ルール」で反映を確認できます。
 
 > 注意: デプロイするとコンソール上で手編集したルールは上書きされます。以後はこのファイルを正としてください。

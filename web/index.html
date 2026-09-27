@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SONG OGIRI GRAND PRIX</title>
+<script src="config/config.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Zen+Kaku+Gothic+New:wght@700;900&display=swap" rel="stylesheet">
 <style>
@@ -130,8 +131,8 @@ header {
 </div>
 
 <div class="movie-btns">
-  <a class="movie-btn" href="https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/movie%2Fopcomment_v3.00.mp4?alt=media&token=2dc68617-2b14-4d26-b08f-ca91dc423c01" target="_blank">▶ OP COMMENT</a>
-  <a class="movie-btn" href="https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/movie%2Fopmovie_v4.00.mp4?alt=media&token=465547aa-dc4a-4617-b5ca-c96524638286" target="_blank">▶ OP MOVIE</a>
+  <a class="movie-btn" data-asset="movie%2Fopcomment_v3.00.mp4" target="_blank">▶ OP COMMENT</a>
+  <a class="movie-btn" data-asset="movie%2Fopmovie_v4.00.mp4" target="_blank">▶ OP MOVIE</a>
 </div>
 
 <div class="modal-bg" id="modal-host" onclick="this.classList.remove('show')">
@@ -165,6 +166,8 @@ header {
 // このページからの相対パスにある各画面の絶対 URL（フォーク / ローカル / どのホスティングでも正しく動く）
 function pageUrl(file) { return new URL(file, location.href).href; }
 const REPO_URL = 'https://github.com/75asa/ippon-gp';
+// OP 動画は config.js の Storage を参照する（プロジェクトを差し替えてもリンクが追従する）
+document.querySelectorAll('a[data-asset]').forEach(a => { a.href = window.IPPON_CONFIG.storageBase + a.dataset.asset + '?alt=media'; });
 document.getElementById('repo-link').href = REPO_URL;
 
 new QRCode(document.getElementById('qr-host'), {
