@@ -30,8 +30,8 @@
 |---|---|---|
 | HOST | `votes`, `scores`, `mode`, `se_master`, `se_trigger`, `agenda`, `answer_text` | ほぼ全部（下記スキーマ参照） |
 | MAIN | `mode`, `taiki`, `odai`, `votes`, `revealed`, `scores`, `agenda`, `answer_text`, `keep_audio`, `camera_room` | `agenda` の削除（動画終了時） |
-| JUDGE | `mode`, `revealed`, `votes`, `settings/judges` | `votes/{seat} = true` |
-| ADMIN（設定画面） | `settings/judges`, `votes` | `settings/judges`（票がある間は名前・種別のみ） |
+| JUDGE | `mode`, `revealed`, `votes`, `settings/judges`, `settings/ipponThreshold` | `votes/{seat} = true` |
+| ADMIN（設定画面） | `settings/judges`, `settings/ipponThreshold`, `votes` | `settings/judges`（票がある間は名前・種別のみ）、`settings/ipponThreshold`（票が無いときのみ） |
 | CAM | — | `camera_room`（PeerJS ルーム ID の公開 / 削除） |
 
 ## 3. RTDB スキーマ（ルート直下、フラット）
@@ -50,7 +50,8 @@
 | `se_master` | string（端末 ID） | SE を実際に再生する HOST 端末 | HOST |
 | `se_trigger` | `{ key, action:'play'\|'stop', ts }` | SE 再生イベント（`laugh_1..4`, `se_cheer`, `se_clap`） | HOST |
 | `camera_room` | string / 削除 | PeerJS ルーム ID（`ippon-host-{id}`） | CAM |
-| `settings/judges` | `{ [seat: 1..N]: { name, kind: 'panel'\|'venue' } }` / 削除 | 審査員の席（N = 定員 6〜10、席番号は連番）。無ければ `web/src/shared/judges.js` の初期値 10 席。`votes` はここにある席にだけ入る | ADMIN |
+| `settings/judges` | `{ [seat: 1..N]: { name, kind: 'panel'\|'venue' } }` / 削除 | 審査員の席（N = 定員 1〜10 かつ IPPON に必要な票数以上、席番号は連番）。無ければ `web/src/shared/judges.js` の初期値 10 席。`votes` はここにある席にだけ入る | ADMIN |
+| `settings/ipponThreshold` | `1..10`（整数）/ 削除 | IPPON に必要な票数。審査員の定員以下。無ければ 6（`web/src/shared/ippon.js`） | ADMIN |
 
 ### 3.1 既知の設計課題
 
@@ -66,14 +67,14 @@
 ```
 JUDGE: set(votes/{seat}, true)
   └─▶ MAIN: onValue(votes) → 50ms デバウンス → 票数差分をキューに積み 150ms 間隔で
-           main_{n}.png（フレーム）を切替。6 票で ipponTriggered=true → main_IPPON.png 全画面
+           main_{step}.png（フレーム）を切替。必要な票数（既定 6）で ipponTriggered=true → main_IPPON.png 全画面
   └─▶ HOST: onValue(votes) → 票数差分をキューに積み、1.mp3..5.mp3 を順次再生。
-           6 票目は 6.mp3 → IPPON.mp3。AudioBuffer に事前デコードして遅延ゼロ化
+           IPPON の票は 6.mp3 → IPPON.mp3。AudioBuffer に事前デコードして遅延ゼロ化
 HOST: 「点数を公開」 set(revealed,true) + no-ippon.mp3
   └─▶ MAIN: kekka_{n}.png（左下バッジ）表示
 ```
 
-- IPPON 閾値 **6** は JUDGE / MAIN / HOST の 3 箇所にハードコード。
+- IPPON に必要な票数は `settings/ipponThreshold`（既定 6、#79）。素材は 6 段（`main_0..6`、`1..6.mp3`）なので、IPPON 前の票は `voteStep()` で 1〜5 段に割り振る（票数 6 なら票数そのまま）。結果バッジ `kekka_n` は票数の数字で、画像の無い 6 票以上は MAIN が SVG で描く。
 - 審査員は **10 席**（6 名の固定名 + 会場審査員 4）。座席の排他制御は無い（同じ席を 2 台で選べる）。
 
 ## 5. 音声
