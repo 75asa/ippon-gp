@@ -1,5 +1,7 @@
 # RTDB セキュリティルール（firebase/database.rules.json）をエミュレータで検証する。
 # ケースは tests/rules/test-rules.mjs。手元で動かす方法は docs/SECURITY_RULES.md を参照。
+# firebase-tools のバージョンによってエミュレータの名前空間が変わる（demo-ippon-default-rtdb など）ため、
+# --load-rules でテストが使う名前空間（demo-ippon）にルールを直接読み込む。
 name: Test RTDB rules
 
 on:
@@ -34,4 +36,4 @@ jobs:
           distribution: temurin
           java-version: 21
       - name: Run rules tests on the emulator
-        run: npx --yes firebase-tools@15.31.0 emulators:exec --only database --project demo-ippon "node tests/rules/test-rules.mjs"
+        run: npx --yes firebase-tools@15.31.0 emulators:exec --only database --project demo-ippon "node tests/rules/test-rules.mjs --load-rules"
