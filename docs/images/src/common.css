@@ -1,0 +1,19 @@
+/* docs/images のブランド素材で共有するトークン。色は web/index.html（ランチャー）に合わせている */
+:root {
+  --ink: #12001f;
+  --ink-2: #1a0033;
+  --magenta: #cc00ff;
+  --magenta-soft: #ddb8ff;
+  --orange: #ff9500;
+  --teal: #00ddaa;
+  --lilac: #f0eaf8;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: var(--ink); }
+body { font-family: 'Zen Kaku Gothic New', sans-serif; -webkit-font-smoothing: antialiased; }
+
+.chip { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 3px; padding: 6px 16px 4px; border-radius: 50px; color: #fff; }
+.chip.main  { background: linear-gradient(150deg, #cc00ff, #7700cc); }
+.chip.host  { background: linear-gradient(150deg, #ff9500, #cc5500); }
+.chip.judge { background: linear-gradient(150deg, #f8f0ff, #ddb8ff); color: #1a0033; }
+.chip.cam   { background: linear-gradient(150deg, #00ddaa, #0099cc); }
