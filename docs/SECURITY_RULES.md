@@ -69,7 +69,7 @@ PR で `firebase/` か `tests/rules/` を変えると、GitHub Actions（`.githu
 ```bash
 npm i -g firebase-tools   # もしくはリポジトリ内で npm i --no-save firebase-tools して npx
 # エミュレータ起動 → スクリプト実行 → 停止 までを一発で
-firebase emulators:exec --only database --project demo-ippon "node tests/rules/test-rules.mjs"
+firebase emulators:exec --only database --project demo-ippon "node tests/rules/test-rules.mjs --load-rules"
 ```
 
 `demo-` で始まるプロジェクト ID はオフライン専用の扱いになり、ログイン不要・本番に触りません。

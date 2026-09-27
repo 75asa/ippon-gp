@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // database.rules.json を Realtime Database エミュレータに対して検証する。
 // 使い方（エミュレータの起動〜停止まで込み）:
-//   npx firebase emulators:exec --only database --project demo-ippon "node tests/rules/test-rules.mjs"
+//   npx firebase emulators:exec --only database --project demo-ippon "node tests/rules/test-rules.mjs --load-rules"
 // もしくは別ターミナルで `firebase emulators:start --only database --project demo-ippon` を起動しておき
 //   node tests/rules/test-rules.mjs
 // エミュレータ jar を直接起動した等でルールが未ロードの場合は `--load-rules` を付けると
