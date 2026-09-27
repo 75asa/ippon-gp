@@ -79,7 +79,7 @@ h1 { color: #f5c400; font-size: 14px; letter-spacing: 2px; margin-bottom: 6px; }
 
 
 
-<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js" integrity="sha384-PMNj1TmCgXfW24/rfIyxYSAWwj2mffkMfguUWv08iNFcy0kTC0JN7E/tE+pJ7+fa" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body>
 
@@ -187,8 +187,7 @@ h1 { color: #f5c400; font-size: 14px; letter-spacing: 2px; margin-bottom: 6px; }
 
 
 <script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js';
-import { getDatabase, ref, set, remove, onValue, get } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js';
+import { initializeApp, getDatabase, ref, set, remove, onValue, get } from '../src/shared/firebase.js';
 import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue, voteStep } from '../src/shared/ippon.js';
 import { PLAYERS_PATH, PLAYER_COUNT, playerAt, scoreIndex, playersFromValue } from '../src/shared/players.js';
 

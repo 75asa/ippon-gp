@@ -107,10 +107,10 @@ HOST: 「点数を公開」 set(revealed,true) + no-ippon.mp3
 
 ## 8. 外部依存
 
-- `firebase-app.js` / `firebase-database.js` 12.15.0（gstatic）
-- `peerjs@1.5.2`（unpkg）
-- `qrcodejs 1.0.0`（cdnjs、index のみ）
-- Google Fonts（Bebas Neue, Zen Kaku Gothic New, Black Han Sans）
+- `firebase-app.js` / `firebase-database.js` 12.15.0（gstatic）。各画面は `web/src/shared/firebase.js` 経由で import し、バージョンはそこ 1 箇所で管理する（ES Modules には SRI を付けられないため、URL のバージョン固定で担保）
+- `peerjs 1.5.2`（cdnjs、SRI 付き。MAIN / HOST / CAM）
+- `qrcodejs 1.0.0`（cdnjs、SRI 付き。ランチャーのみ）
+- Google Fonts（Bebas Neue, Zen Kaku Gothic New, Black Han Sans）。CSS が動的に返るので SRI は付けられない。読み込めなくても代替フォントで表示は続く
 
 ## 9. To-Be（M1〜M2 で目指す形）
 

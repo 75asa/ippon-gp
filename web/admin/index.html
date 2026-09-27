@@ -151,8 +151,7 @@ ol { list-style: none; display: flex; flex-direction: column; gap: 8px; }
 </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
-import { getDatabase, ref, set, update, remove, onValue } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
+import { initializeApp, getDatabase, ref, set, update, remove, onValue } from "../src/shared/firebase.js";
 import { JUDGES_PATH, MIN_SEATS, MAX_SEATS, NAME_MAX, KINDS, judgesFromValue, judgesToRecord, validateJudges } from "../src/shared/judges.js";
 import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue } from "../src/shared/ippon.js";
 import { SEATS_PATH } from "../src/shared/seats.js";
