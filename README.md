@@ -8,6 +8,7 @@
 - 🏗️ 現行アーキテクチャ / RTDB スキーマ: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - 💰 SaaS 化・マネタイズ設計: [docs/SAAS_DESIGN.md](docs/SAAS_DESIGN.md)
 - 🔁 本家への還元方針: [docs/UPSTREAM.md](docs/UPSTREAM.md)
+- 📋 バックログ: [Issues](https://github.com/75asa/ippon-gp/issues)（[マイルストーン](https://github.com/75asa/ippon-gp/milestones) M0〜M4 / Epic #5〜#9）
 - 🤝 コントリビュート: [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ---
@@ -44,9 +45,9 @@ cd ippon-gp
 python3 -m http.server 8080   # http://localhost:8080/index.html
 ```
 
-> ⚠️ **現状の制約**: Firebase プロジェクト・素材 URL・出演者名・お題が各 HTML にハードコードされています。
-> 自分のイベントで使うには、`firebaseConfig` と素材 URL を書き換える必要があります。
-> これを解消する「設定駆動化」が [ロードマップ](docs/ROADMAP.md) の最優先事項です（[#config-extraction](docs/ROADMAP.md#m1-tokyo-ready)）。
+> ⚠️ **現状の制約**: 素材ファイル名・出演者名・お題が各 HTML にハードコードされています。
+> Firebase プロジェクトと Storage のベース URL は `config.js`（ひな形: `config.example.js`）で差し替えられます。
+> 残りを解消する「設定駆動化」が [ロードマップ](docs/ROADMAP.md) M1 の最優先事項です（#17, #18, #19）。
 
 ### 必要なもの
 
@@ -67,7 +68,8 @@ python3 -m http.server 8080   # http://localhost:8080/index.html
 ├── ippon_judge.html        # 審査員投票
 ├── ippon_camera.html       # カメラ配信
 ├── docs/                   # 設計・計画ドキュメント
-├── scripts/                # GitHub Projects などのセットアップスクリプト
+├── config.js               # Firebase 設定・Storage ベース URL（環境ごとに差し替え）
+├── scripts/                # GitHub Projects のセットアップスクリプト
 └── .github/                # Issue/PR テンプレート、ラベル定義、ワークフロー
 ```
 
@@ -76,4 +78,13 @@ python3 -m http.server 8080   # http://localhost:8080/index.html
 ## ライセンス
 
 本家リポジトリにライセンスファイルが存在しないため、**現時点ではライセンス未確定** です。
-OSS として公開・SaaS 化するには本家作者の同意が必要です（Issue 参照）。
+OSS として公開・SaaS 化するには本家作者の同意が必要です（#10。依頼文面は [docs/UPSTREAM.md](docs/UPSTREAM.md)）。
+
+---
+
+## 開発の進め方（Issue / マイルストーン / Projects）
+
+- バックログは **GitHub Issues が正**。Epic（#5〜#9）の下にサブ Issue をぶら下げ、マイルストーン M0〜M4 に紐付ける
+- ラベルの定義は [`.github/labels.yml`](.github/labels.yml)。Actions → **Setup repo** を実行すると同期される（マイルストーンも無ければ作成）
+- GitHub Projects は `gh auth refresh -s project && bash scripts/setup-project.sh 75asa 75asa/ippon-gp` で作成できる
+- PR は 1 関心事、テンプレートのチェックリストを埋める。詳細は [CONTRIBUTING.md](CONTRIBUTING.md)

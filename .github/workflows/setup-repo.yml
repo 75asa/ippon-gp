@@ -56,7 +56,9 @@ jobs:
       - name: Create milestones
         run: |
           set -euo pipefail
-          existing=$(gh api "repos/$REPO/milestones?state=all&per_page=100" --jq '.[].title')
+          if ! existing=$(gh api "repos/$REPO/milestones?state=all&per_page=100" --jq '.[].title' 2>/dev/null); then
+            echo "::warning::マイルストーン API にアクセスできません。Settings → General → Features → Issues を ON にして再実行してください"; exit 0
+          fi
           create() {  # title description due
             if echo "$existing" | grep -qxF "$1"; then echo "skip: $1"; return; fi
             args=(-f "title=$1" -f "description=$2")
