@@ -255,6 +255,7 @@ body { background: #000; display: flex; align-items: center; justify-content: ce
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
 import { getDatabase, ref, onValue, remove, get } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
+import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue, voteStep } from "../src/shared/ippon.js";
 
 const STORAGE_BASE = window.IPPON_CONFIG.storageBase;
 
@@ -479,6 +480,8 @@ document.addEventListener('fullscreenchange', () => {
 });
 
 let ipponTriggered = false;
+// IPPON に必要な票数（設定画面で変更。無ければ 6）。採点フレームは voteStep() で 0〜6 段に割り振る
+let threshold = DEFAULT_THRESHOLD;
 let imageQueue = [];
 let isPlayingImageQueue = false;
 let displayedVotes = 0; // キューで表示中の票数
@@ -526,6 +529,23 @@ function showKekkaImg(n) {
     badge.style.display = 'block';
   }
 }
+// 結果バッジ（票数）。画像は kekka_0〜5 しか無いので、6 票以上（必要な票数を 7 以上にしたとき）は同じ見た目を SVG で描く。
+// kekka-img-6 は IPPON の全画面画像なので票数バッジには使わない
+function showCountBadge(n) {
+  if (n <= 5) { showKekkaImg(n); return; }
+  document.querySelectorAll('[id^="kekka-img-"]').forEach(el => el.style.display = 'none');
+  document.getElementById('score-badge').style.display = 'none';
+  let el = document.getElementById('kekka-img-count');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'kekka-img-count';
+    el.style.cssText = 'position:absolute;left:8vw;bottom:13vh;height:40vh;aspect-ratio:1056/1209;display:none;z-index:30;';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '<svg viewBox="0 0 1056 1209" width="100%" height="100%"><circle cx="513" cy="523" r="262" fill="#f0d3ef" stroke="#55544f" stroke-width="26"/>'
+    + '<text x="513" y="533" text-anchor="middle" dominant-baseline="central" font-family="\'Black Han Sans\', sans-serif" font-size="440" fill="#434453">' + Number(n) + '</text></svg>';
+  el.style.display = 'block';
+}
 function hideScoreImg() {
   document.querySelectorAll('[id^="score-img-"]').forEach(el => el.style.display = 'none');
   document.getElementById('score-img').style.display = 'none';
@@ -539,7 +559,7 @@ function showVoteImage(votes) {
   if (ipponTriggered) return;
   if (currentMode === 'scoreboard') return;
 
-  if (votes >= 6) {
+  if (votes >= threshold) {
     ipponTriggered = true;
     const agendaImg = document.getElementById('agenda-img');
     const agendaVideo = document.getElementById('agenda-video');
@@ -549,10 +569,10 @@ function showVoteImage(votes) {
     showKekkaImg(6);
     showCameraVideo(false);
   } else if (currentRevealed) {
-    showScoreImg(votes);  // フレーム枠を表示（透過PNGなのでカメラが透ける）
-    showKekkaImg(votes);
+    showScoreImg(voteStep(votes, threshold));  // フレーム枠を表示（透過PNGなのでカメラが透ける）
+    showCountBadge(votes);
   } else {
-    showScoreImg(votes);  // フレーム枠を表示
+    showScoreImg(voteStep(votes, threshold));  // フレーム枠を表示
     hideKekkaImg();
   }
 }
@@ -563,19 +583,19 @@ function updateUI() {
 
   if (currentMode === 'saiten') {
     showCameraVideo(true);
-    showScoreImg(currentVotes);  // フレーム枠は常に表示
+    showScoreImg(voteStep(currentVotes, threshold));  // フレーム枠は常に表示
     if (currentRevealed) {
-      showKekkaImg(currentVotes);
+      showCountBadge(currentVotes);
     } else {
       hideKekkaImg();
     }
   } else {
     showCameraVideo(false);
     if (currentRevealed) {
-      showScoreImg(currentVotes);
-      showKekkaImg(currentVotes);
+      showScoreImg(voteStep(currentVotes, threshold));
+      showCountBadge(currentVotes);
     } else {
-      showScoreImg(currentVotes);
+      showScoreImg(voteStep(currentVotes, threshold));
       hideKekkaImg();
     }
   }
@@ -822,7 +842,7 @@ let latestVoteCount = 0;
 
 onValue(ref(db, 'votes'), (snapshot) => {
   const allVotes = snapshot.val() || {};
-  latestVoteCount = Math.min(Object.keys(allVotes).length, 6);
+  latestVoteCount = Math.min(Object.keys(allVotes).length, threshold);
 
   clearTimeout(voteDebounceTimer);
   voteDebounceTimer = setTimeout(() => {
@@ -840,6 +860,11 @@ onValue(ref(db, 'votes'), (snapshot) => {
       enqueueImages(from, newVotes);
     }
   }, 50);
+});
+
+onValue(ref(db, THRESHOLD_PATH), (snapshot) => {
+  threshold = thresholdFromValue(snapshot.val());
+  updateUI();
 });
 
 onValue(ref(db, 'revealed'), (snapshot) => {

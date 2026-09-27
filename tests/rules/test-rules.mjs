@@ -179,6 +179,33 @@ const cases = [
   ['設定が無いときは votes/10 に投票できる', put('/votes/10', true), ALLOW],
   ['後片付け: votes を消す', del('/votes'), ALLOW],
 
+  // settings/ipponThreshold（IPPON に必要な票数）。ここに来た時点で votes と settings/judges は空
+  ['ipponThreshold = 5 は許可（審査員は初期値の 10 席）', put('/settings/ipponThreshold', 5), ALLOW],
+  ['ipponThreshold = 0 は拒否', put('/settings/ipponThreshold', 0), DENY],
+  ['ipponThreshold = 11 は拒否', put('/settings/ipponThreshold', 11), DENY],
+  ['ipponThreshold = 2.5 は拒否', put('/settings/ipponThreshold', 2.5), DENY],
+  ['ipponThreshold = "5" は型違いで拒否', put('/settings/ipponThreshold', '5'), DENY],
+  ['票数 5 のとき審査員 4 席は拒否（定員 < 票数）', put('/settings/judges', judges(4)), DENY],
+  ['ipponThreshold = 3 は許可', put('/settings/ipponThreshold', 3), ALLOW],
+  ['票数 3 なら審査員 4 席は許可', put('/settings/judges', judges(4)), ALLOW],
+  ['票数 3 のとき審査員 2 席は拒否', put('/settings/judges', judges(2)), DENY],
+  ['審査員 4 席のとき票数 5 は拒否', put('/settings/ipponThreshold', 5), DENY],
+  ['審査員 4 席のとき票数を消す（初期値 6 に戻す）のは拒否', del('/settings/ipponThreshold'), DENY],
+  ['票数 4 は許可（定員ちょうど）', put('/settings/ipponThreshold', 4), ALLOW],
+  ['votes/1 に投票', put('/votes/1', true), ALLOW],
+  ['投票中は票数を変えられない', put('/settings/ipponThreshold', 3), DENY],
+  ['投票中は票数を消せない', del('/settings/ipponThreshold'), DENY],
+  ['votes を消す（票数の検証の続き）', del('/votes'), ALLOW],
+  ['ipponThreshold = 1 は許可', put('/settings/ipponThreshold', 1), ALLOW],
+  ['票数 1 なら審査員 1 席も許可', put('/settings/judges', judges(1)), ALLOW],
+  ['審査員を 8 席に戻す', put('/settings/judges', judges(8)), ALLOW],
+  ['審査員 8 席なら票数を消せる（初期値 6）', del('/settings/ipponThreshold'), ALLOW],
+  ['票数 6（初期値）のとき審査員 5 席は拒否', put('/settings/judges', judges(5)), DENY],
+  ['審査員 8 席のとき票数 8 は許可', put('/settings/ipponThreshold', 8), ALLOW],
+  ['審査員 8 席のとき票数 9 は拒否', put('/settings/ipponThreshold', 9), DENY],
+  ['後片付け: 票数を消す', del('/settings/ipponThreshold'), ALLOW],
+  ['後片付け: 審査員の設定を消す', del('/settings/judges'), ALLOW],
+
   // 読み取り
   ['ルートの読み取りは誰でも可', { method: 'GET', path: '/' }, ALLOW],
 ];

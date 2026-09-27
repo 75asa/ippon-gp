@@ -63,6 +63,7 @@ body { background: #000; font-family: sans-serif; display: flex; flex-direction:
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
 import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
 import { JUDGES_PATH, judgesFromValue } from "../src/shared/judges.js";
+import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue } from "../src/shared/ippon.js";
 
 const STORAGE_BASE = window.IPPON_CONFIG.storageBase;
 
@@ -75,6 +76,8 @@ const votesRef = ref(db, 'votes');
 // 席は設定画面（admin/）で編集する settings/judges から作る。設定が無ければ初期値の 10 席
 let judges = [];
 let seatNames = {};
+// IPPON に必要な票数（設定画面で変更。無ければ 6）
+let threshold = DEFAULT_THRESHOLD;
 
 let currentVotes = {};
 let isRevealed = false;
@@ -117,7 +120,7 @@ window.goBackFromAll = () => showView(previousView);
 window.doVote = () => {
   if (!selectedSeat) return;
   const totalVotes = Object.keys(currentVotes).length;
-  if (!isSaitenMode || isRevealed || currentVotes[selectedSeat] || totalVotes >= 6) return;
+  if (!isSaitenMode || isRevealed || currentVotes[selectedSeat] || totalVotes >= threshold) return;
   set(ref(db, `votes/${selectedSeat}`), true);
 };
 
@@ -125,7 +128,7 @@ function updateVoteBtn() {
   if (!selectedSeat) return;
   const btn = document.getElementById('vote-btn');
   const sub = document.getElementById('vote-sub');
-  const isIppon = Object.keys(currentVotes).length >= 6;
+  const isIppon = Object.keys(currentVotes).length >= threshold;
   const isVoted = currentVotes[selectedSeat];
   if (isRevealed || isIppon) {
     btn.className = 'vote-btn locked';
@@ -145,7 +148,7 @@ function updateVoteBtn() {
 function renderAll(votes) {
   const grid = document.getElementById('grid');
   grid.innerHTML = '';
-  const isIppon = Object.keys(votes).length >= 6;
+  const isIppon = Object.keys(votes).length >= threshold;
   for (const { seat: i } of judges) {
     const btn = document.createElement('button');
     const isVoted = votes[i] === true;
@@ -162,7 +165,7 @@ function renderAll(votes) {
     }
     btn.onclick = () => {
       const total = Object.keys(currentVotes).length;
-      if (!isSaitenMode || isRevealed || currentVotes[i] || total >= 6) return;
+      if (!isSaitenMode || isRevealed || currentVotes[i] || total >= threshold) return;
       set(ref(db, `votes/${i}`), true);
     };
     grid.appendChild(btn);
@@ -180,6 +183,11 @@ onValue(ref(db, JUDGES_PATH), (snapshot) => {
   } else if (selectedSeat) {
     document.getElementById('vote-name').textContent = seatNames[selectedSeat];
   }
+  updateVoteBtn();
+  renderAll(currentVotes);
+});
+onValue(ref(db, THRESHOLD_PATH), (snapshot) => {
+  threshold = thresholdFromValue(snapshot.val());
   updateVoteBtn();
   renderAll(currentVotes);
 });

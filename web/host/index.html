@@ -189,6 +189,7 @@ h1 { color: #f5c400; font-size: 14px; letter-spacing: 2px; margin-bottom: 6px; }
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js';
 import { getDatabase, ref, set, remove, onValue, get } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js';
+import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue, voteStep } from '../src/shared/ippon.js';
 
 const STORAGE_BASE = window.IPPON_CONFIG.storageBase;
 
@@ -342,6 +343,10 @@ window.setVolume = (v) => {
   [sounds[1],sounds[2],sounds[3],sounds[4],sounds[5],sound10,soundIppon,shutsudaiAudio,thinkingAudio,noIpponAudio,...Object.values(odaiAudios),...Object.values(laughAudios),...Object.values(agendaAudios)].forEach(a => { if (a) a.volume = masterVolume; });
 };
 
+// IPPON に必要な票数（設定画面で変更。無ければ 6）。投票音 1〜6.mp3 は voteStep() で割り振る
+let threshold = DEFAULT_THRESHOLD;
+onValue(ref(db, THRESHOLD_PATH), (snap) => { threshold = thresholdFromValue(snap.val()); });
+
 // 投票音キュー
 let soundQueue = [];
 let isPlaying = false;
@@ -355,8 +360,8 @@ function playNextInQueue() {
   if (soundQueue.length === 0) { isPlaying = false; return; }
   isPlaying = true;
   const c = soundQueue.shift();
-  if (c >= 6) {
-    // 6票目: バッファ優先、なければnew Audio
+  if (c >= threshold) {
+    // IPPON の票: 6.mp3 → IPPON.mp3。バッファ優先、なければnew Audio
     const src = playVoteBuffer("6");
     if (src) {
       src.onended = () => {
@@ -378,8 +383,8 @@ function playNextInQueue() {
     }
     return;
   }
-  // 1〜5票: バッファ優先、なければnew Audio
-  const key = String(c);
+  // IPPON 前の票: 1〜5.mp3。バッファ優先、なければnew Audio
+  const key = String(voteStep(c, threshold));
   const played = playVoteBuffer(key);
   if (!played) {
     const audio = sounds[key];

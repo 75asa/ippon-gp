@@ -67,6 +67,10 @@ ol { list-style: none; display: flex; flex-direction: column; gap: 8px; }
 .status { font-size: 13px; font-weight: 700; min-height: 1.6em; }
 .status.ok { color: var(--ok); }
 .status.error { color: var(--error); }
+.stepper { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.stepper input { width: 96px; text-align: center; font-family: 'Bebas Neue', sans-serif; font-size: 34px; line-height: 1; border: 1px solid var(--line); border-radius: 12px; padding: 6px 8px 2px; background: #fff; font-variant-numeric: tabular-nums; }
+.stepper .icon { width: 44px; height: 44px; font-size: 20px; }
+.stepper .unit { font-weight: 900; }
 
 @media (max-width: 520px) {
   .seat { grid-template-columns: 36px minmax(0, 1fr) auto; }
@@ -88,7 +92,7 @@ ol { list-style: none; display: flex; flex-direction: column; gap: 8px; }
       <h1 id="h-judges">JUDGE <small>審査員</small></h1>
       <span class="pill" id="state">読み込み中…</span>
     </div>
-    <p class="help">並び順が審査員スマホの席の順番になります。名前はいつでも変えられます（投票中でも、入った票はずれません）。席の追加・削除・並べ替えは、票が入っていないときだけできます。</p>
+    <p class="help">並び順が審査員スマホの席の順番になります。名前はいつでも変えられます（投票中でも、入った票はずれません）。席の追加・削除・並べ替えは、票が入っていないときだけできます。席の数は下の「IPPON に必要な票数」以上にしてください。</p>
     <p class="lock" id="lock" hidden></p>
     <ol id="list" aria-label="審査員の席"></ol>
     <div class="foot">
@@ -103,12 +107,35 @@ ol { list-style: none; display: flex; flex-direction: column; gap: 8px; }
     </div>
     <p class="status" id="status" role="status" aria-live="polite"></p>
   </section>
+
+  <section class="card" aria-labelledby="h-ippon">
+    <div class="card-head">
+      <h1 id="h-ippon">IPPON <small>に必要な票数</small></h1>
+      <span class="pill" id="t-state">読み込み中…</span>
+    </div>
+    <p class="help">この票数に届いた瞬間に IPPON 演出になります。審査員の席の数以下にしてください。採点フレームと投票音は、票数に合わせて自動で割り振られます。票が入っていないときだけ変えられます。</p>
+    <p class="lock" id="t-lock" hidden></p>
+    <div class="stepper">
+      <button class="icon" id="t-minus" type="button" aria-label="1 票減らす">−</button>
+      <input id="t-input" type="number" inputmode="numeric" min="1" max="10" step="1" aria-label="IPPON に必要な票数">
+      <button class="icon" id="t-plus" type="button" aria-label="1 票増やす">＋</button>
+      <span class="unit" id="t-range"></span>
+    </div>
+    <div class="errors" id="t-errors" role="alert"></div>
+    <div class="foot">
+      <button class="btn link" id="t-reset" type="button">初期値（6 票）に戻す</button>
+      <button class="btn ghost push" id="t-discard" type="button">変更を取り消す</button>
+      <button class="btn primary" id="t-save" type="button">保存する</button>
+    </div>
+    <p class="status" id="t-status" role="status" aria-live="polite"></p>
+  </section>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
 import { getDatabase, ref, set, update, remove, onValue } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
 import { JUDGES_PATH, MIN_SEATS, MAX_SEATS, NAME_MAX, KINDS, judgesFromValue, judgesToRecord, validateJudges } from "../src/shared/judges.js";
+import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue } from "../src/shared/ippon.js";
 
 const app = initializeApp(window.IPPON_CONFIG.firebase);
 const db = getDatabase(app);
@@ -116,7 +143,11 @@ const db = getDatabase(app);
 let remote = null;        // { judges, isDefault }（RTDB の最新）
 let draft = [];           // 編集中の [{ name, kind }]
 let voteCount = 0;
-let loaded = { judges: false, votes: false };
+let loaded = { judges: false, votes: false, threshold: false };
+let thresholdRemote = DEFAULT_THRESHOLD; // 保存済みの票数（席の数の下限）
+let thresholdIsDefault = true;
+let thresholdDraft = DEFAULT_THRESHOLD;
+let thresholdSaving = false;
 let saving = false;
 let resetArmedUntil = 0;
 
@@ -125,6 +156,7 @@ const clone = (list) => list.map(({ name, kind }) => ({ name, kind }));
 const same = (a, b) => a.length === b.length && a.every((j, i) => j.name === b[i].name && j.kind === b[i].kind);
 const isDirty = () => remote && !same(draft, clone(remote.judges));
 const locked = () => voteCount > 0;
+const minSeats = () => Math.max(MIN_SEATS, thresholdRemote);
 
 function setStatus(text, kind = '') {
   const el = $('status');
@@ -133,7 +165,7 @@ function setStatus(text, kind = '') {
 }
 
 function render() {
-  if (!loaded.judges || !loaded.votes) return;
+  if (!loaded.judges || !loaded.votes || !loaded.threshold) return;
   const list = $('list');
   const focused = document.activeElement?.dataset?.field ? { i: document.activeElement.dataset.i, field: document.activeElement.dataset.field, pos: document.activeElement.selectionStart } : null;
   list.replaceChildren(...draft.map((j, i) => {
@@ -159,7 +191,7 @@ function render() {
     tools.append(
       iconButton('↑', `${i + 1} 番を上へ`, locked() || i === 0, () => move(i, -1)),
       iconButton('↓', `${i + 1} 番を下へ`, locked() || i === draft.length - 1, () => move(i, 1)),
-      iconButton('×', `${i + 1} 番を削除`, locked() || draft.length <= MIN_SEATS, () => { draft.splice(i, 1); render(); }),
+      iconButton('×', `${i + 1} 番を削除`, locked() || draft.length <= minSeats(), () => { draft.splice(i, 1); render(); }),
     );
     li.append(num, input, sel, tools);
     return li;
@@ -193,7 +225,7 @@ function renderMeta() {
   else if (dirty) { pill.textContent = '未保存の変更あり'; pill.className = 'pill dirty'; }
   else { pill.textContent = '保存済み'; pill.className = 'pill saved'; }
 
-  $('count').textContent = `${draft.length} 席（${MIN_SEATS}〜${MAX_SEATS} 席）`;
+  $('count').textContent = `${draft.length} 席（${minSeats()}〜${MAX_SEATS} 席）`;
   $('add').disabled = locked() || draft.length >= MAX_SEATS;
 
   const lock = $('lock');
@@ -204,17 +236,73 @@ function renderMeta() {
       : `いま ${voteCount} 票入っています。名前と種別は変えられますが、席の追加・削除・並べ替えは HOST で投票をリセットしてからにしてください。`;
   }
 
-  const errors = validateJudges(draft);
+  const errors = validateJudges(draft, thresholdRemote);
   if (locked() && draft.length !== remote.judges.length) errors.push('投票中は席の数を変えられません。変更を取り消すか、投票をリセットしてください。');
   $('errors').replaceChildren(...errors.map(e => { const d = document.createElement('div'); d.textContent = e; return d; }));
   $('save').disabled = saving || !dirty || errors.length > 0 || (locked() && remote.isDefault);
   $('discard').disabled = saving || !dirty;
   $('reset').disabled = saving || locked() || remote.isDefault;
   if (Date.now() > resetArmedUntil) $('reset').textContent = '初期値に戻す';
+  renderThreshold();
+}
+
+/* ---- IPPON に必要な票数 ---- */
+// 上限は保存済みの席の数（ルールも保存済みの settings/judges と比べる）
+const maxThreshold = () => remote ? remote.judges.length : MAX_SEATS;
+
+function thresholdErrors() {
+  const t = thresholdDraft;
+  if (!Number.isInteger(t)) return ['票数は整数で入力してください'];
+  if (t < 1 || t > maxThreshold()) return [`票数は 1〜${maxThreshold()}（審査員の席の数）にしてください。席の数より多くするには、先に審査員の席を増やして保存してください`];
+  return [];
+}
+
+function renderThreshold() {
+  if (!loaded.judges || !loaded.votes || !loaded.threshold) return;
+  const input = $('t-input');
+  if (document.activeElement !== input) input.value = Number.isFinite(thresholdDraft) ? thresholdDraft : '';
+  input.max = maxThreshold();
+  input.disabled = locked() || thresholdSaving;
+  $('t-range').textContent = `票（1〜${maxThreshold()}）`;
+  const dirty = thresholdDraft !== thresholdRemote;
+  const pill = $('t-state');
+  if (thresholdIsDefault && !dirty) { pill.textContent = '初期値（6 票）'; pill.className = 'pill'; }
+  else if (dirty) { pill.textContent = '未保存の変更あり'; pill.className = 'pill dirty'; }
+  else { pill.textContent = '保存済み'; pill.className = 'pill saved'; }
+  const lock = $('t-lock');
+  lock.hidden = !locked();
+  if (locked()) lock.textContent = `いま ${voteCount} 票入っています。票数は、HOST で投票をリセットしてから変えてください。`;
+  const errors = dirty ? thresholdErrors() : [];
+  $('t-errors').replaceChildren(...errors.map(e => { const d = document.createElement('div'); d.textContent = e; return d; }));
+  $('t-minus').disabled = locked() || thresholdSaving || !(thresholdDraft > 1);
+  $('t-plus').disabled = locked() || thresholdSaving || !(thresholdDraft < maxThreshold());
+  $('t-save').disabled = locked() || thresholdSaving || !dirty || errors.length > 0;
+  $('t-discard').disabled = thresholdSaving || !dirty;
+  // 初期値 6 に戻すには席が 6 以上必要（ルールと同じ条件）
+  $('t-reset').disabled = locked() || thresholdSaving || thresholdIsDefault || maxThreshold() < DEFAULT_THRESHOLD;
+}
+
+function setTStatus(text, kind = '') {
+  const el = $('t-status');
+  el.textContent = text;
+  el.className = 'status' + (kind ? ' ' + kind : '');
+}
+
+async function writeThreshold(value) {
+  thresholdSaving = true; renderThreshold(); setTStatus('保存しています…');
+  try {
+    if (value === null) await remove(ref(db, THRESHOLD_PATH));
+    else await set(ref(db, THRESHOLD_PATH), value);
+    setTStatus(value === null ? '初期値（6 票）に戻しました。' : `保存しました。${value} 票で IPPON になります。`, 'ok');
+  } catch (e) {
+    setTStatus(`保存できませんでした。票が入っていないか、審査員の席の数を確認してください。（${e.code || e.message}）`, 'error');
+  } finally {
+    thresholdSaving = false; renderMeta();
+  }
 }
 
 async function save() {
-  const errors = validateJudges(draft);
+  const errors = validateJudges(draft, thresholdRemote);
   if (errors.length) return;
   saving = true; renderMeta(); setStatus('保存しています…');
   try {
@@ -262,7 +350,13 @@ $('add').addEventListener('click', () => {
 $('save').addEventListener('click', save);
 $('discard').addEventListener('click', () => { draft = clone(remote.judges); setStatus(''); render(); });
 $('reset').addEventListener('click', resetToDefault);
-window.addEventListener('beforeunload', (e) => { if (isDirty()) e.preventDefault(); });
+$('t-input').addEventListener('input', () => { thresholdDraft = $('t-input').value === '' ? NaN : Number($('t-input').value); renderThreshold(); });
+$('t-minus').addEventListener('click', () => { thresholdDraft -= 1; renderThreshold(); });
+$('t-plus').addEventListener('click', () => { thresholdDraft += 1; renderThreshold(); });
+$('t-save').addEventListener('click', () => { if (!thresholdErrors().length) writeThreshold(thresholdDraft); });
+$('t-discard').addEventListener('click', () => { thresholdDraft = thresholdRemote; setTStatus(''); renderThreshold(); });
+$('t-reset').addEventListener('click', () => writeThreshold(null));
+window.addEventListener('beforeunload', (e) => { if (isDirty() || (loaded.threshold && thresholdDraft !== thresholdRemote)) e.preventDefault(); });
 
 onValue(ref(db, JUDGES_PATH), (snap) => {
   const wasDirty = remote && isDirty();
@@ -271,6 +365,14 @@ onValue(ref(db, JUDGES_PATH), (snap) => {
   // 編集中でなければ最新を取り込む。編集中なら上書きせずに知らせる
   if (!wasDirty) draft = clone(remote.judges);
   else if (!saving) setStatus('他の端末で審査員の設定が変わりました。「変更を取り消す」で最新を読み込めます。', 'error');
+  render();
+});
+onValue(ref(db, THRESHOLD_PATH), (snap) => {
+  const wasDirty = loaded.threshold && thresholdDraft !== thresholdRemote;
+  thresholdIsDefault = snap.val() === null;
+  thresholdRemote = thresholdFromValue(snap.val());
+  loaded.threshold = true;
+  if (!wasDirty || thresholdSaving) thresholdDraft = thresholdRemote;
   render();
 });
 onValue(ref(db, 'votes'), (snap) => {

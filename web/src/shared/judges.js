@@ -4,8 +4,8 @@
 
 export const JUDGES_PATH = 'settings/judges';
 
-// 下限 = IPPON に必要な票数（#79 で設定化するまで 6 固定）。上限 = JUDGE のレイアウトとルールの前提
-export const MIN_SEATS = 6;
+// 実際の下限は IPPON に必要な票数（settings/ipponThreshold、#79）。上限 = JUDGE のレイアウトとルールの前提
+export const MIN_SEATS = 1;
 export const MAX_SEATS = 10;
 export const NAME_MAX = 20;
 
@@ -49,11 +49,12 @@ export function judgesToRecord(list) {
   return rec;
 }
 
-// 保存前の検証。エラーメッセージの配列（空なら OK）
-export function validateJudges(list) {
+// 保存前の検証。エラーメッセージの配列（空なら OK）。threshold = IPPON に必要な票数（定員の下限）
+export function validateJudges(list, threshold = MIN_SEATS) {
   const errors = [];
-  if (list.length < MIN_SEATS || list.length > MAX_SEATS) {
-    errors.push(`席の数は ${MIN_SEATS}〜${MAX_SEATS} にしてください（いま ${list.length} 席）`);
+  const min = Math.max(MIN_SEATS, threshold);
+  if (list.length < min || list.length > MAX_SEATS) {
+    errors.push(`席の数は ${min}〜${MAX_SEATS} にしてください（いま ${list.length} 席）` + (list.length < min && min > MIN_SEATS ? `。IPPON に必要な票数（${threshold}）より少なくするには、先に票数を下げてください` : ''));
   }
   list.forEach((j, i) => {
     const name = j.name.trim();
