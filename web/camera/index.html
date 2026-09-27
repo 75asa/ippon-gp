@@ -120,6 +120,7 @@ body { background: #000; height: 100dvh; overflow: hidden; position: relative; }
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
 import { getDatabase, ref, set, remove } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
+import { CODEC_DEFAULTS, preferCodec, sendingCodec } from "../src/shared/sdp.js";
 
 const STORAGE_BASE = window.IPPON_CONFIG.storageBase;
 
@@ -132,11 +133,11 @@ let peer = null;
 let stream = null;
 let facing = 'environment';
 let roomId = null;
+let currentCodec = ''; // 実際に送っているコーデック（H264 / VP8 など）。当日の切り分け用に表示する
 
 // カメラ / エンコード設定。config.js の IPPON_CONFIG.camera で上書きできる
-const CAMERA = Object.assign({
+const CAMERA = Object.assign({}, CODEC_DEFAULTS, {
   width: 1920, height: 1080, frameRate: 30,
-  maxBitrate: 6000000,
   // 帯域が足りない時にフレームレートを落として解像度を守る（顔のアップは動きが少ないので解像度優先）
   degradationPreference: 'maintain-resolution',
   contentHint: 'detail',
@@ -156,7 +157,7 @@ function updateStatus(text) {
   const t = stream && stream.getVideoTracks()[0];
   const st = t && t.getSettings ? t.getSettings() : null;
   const res = st && st.width ? ` ${st.width}×${st.height}` : '';
-  document.getElementById('status').textContent = text + res;
+  document.getElementById('status').textContent = text + res + (currentCodec ? ` ${currentCodec}` : '');
 }
 
 function genId() {
@@ -178,7 +179,11 @@ async function applyEncodingParams(pc) {
 
 // PeerJS の call は peerConnection が後から生えるので、複数のタイミングで再適用する
 function hookCall(call) {
-  const apply = () => { if (call.peerConnection) applyEncodingParams(call.peerConnection); };
+  const apply = () => {
+    if (!call.peerConnection) return;
+    applyEncodingParams(call.peerConnection);
+    sendingCodec(call.peerConnection).then(c => { if (c) { currentCodec = c.replace('video/', ''); updateStatus('MAIN画面に配信中'); } });
+  };
   apply();
   call.on('stream', apply);
   call.on('iceStateChanged', apply);
@@ -247,7 +252,8 @@ window.startCamera = async function() {
     dc.on('data', msg => {
       if (msg.startsWith('join:')) {
         const viewerId = msg.replace('join:', '');
-        const call = peer.call(viewerId, stream);
+        // H.264 を先頭にした offer を出す（スマホのハードウェアエンコーダを使わせる。無ければ VP8 / VP9 のまま）
+        const call = peer.call(viewerId, stream, { sdpTransform: sdp => preferCodec(sdp, CAMERA.preferredCodec) });
         hookCall(call);
       }
     });

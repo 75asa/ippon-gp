@@ -255,6 +255,7 @@ body { background: #000; display: flex; align-items: center; justify-content: ce
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
 import { getDatabase, ref, onValue, remove, get } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
+import { CODEC_DEFAULTS, preferCodec, setBitrateHints } from "../src/shared/sdp.js";
 import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue, voteStep } from "../src/shared/ippon.js";
 import { PLAYERS_PATH, PLAYER_COUNT, playerAt, scoreIndex, playersFromValue, escapeHtml } from "../src/shared/players.js";
 
@@ -276,7 +277,9 @@ function connectCamera(roomId) {
     dc.on('error', () => { cameraConnectedRoomId = null; });
   });
   cameraPeer.on('call', call => {
-    call.answer();
+    // answer でもコーデック順をそろえ、CAM の送信側が読む開始 / 上限ビットレートを付ける（#61）
+    const cam = Object.assign({}, CODEC_DEFAULTS, window.IPPON_CONFIG.camera || {});
+    call.answer(undefined, { sdpTransform: sdp => setBitrateHints(preferCodec(sdp, cam.preferredCodec), { startKbps: cam.startBitrate / 1000, maxKbps: cam.maxBitrate / 1000 }) });
     call.on('stream', stream => {
       const v = document.getElementById('camera-video');
       v.srcObject = stream;
