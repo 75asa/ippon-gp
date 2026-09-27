@@ -26,7 +26,7 @@
 ## 動作確認
 
 ```bash
-python3 -m http.server 8080
+python3 -m http.server 8080 -d web
 # MAIN / HOST / JUDGE を別タブで開き、JUDGE の投票が MAIN/HOST に反映されることを確認
 ```
 

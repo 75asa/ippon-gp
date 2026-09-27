@@ -19,11 +19,11 @@
 
 | 画面 | ファイル | 役割 |
 |---|---|---|
-| **MAIN** | `ippon_main.html` | 大画面用。待機画面 / お題 / 採点フレーム / IPPON 演出 / スコアボード / OP 動画 / 紹介画像 / カメラ映像を表示 |
-| **HOST** | `ippon_host.html` | 司会・進行用。モード切替、お題出し、点数公開、スコア増減、SE（笑い・歓声・拍手・ブザー）、アジェンダ投影 |
-| **JUDGE** | `ippon_judge.html` | 審査員用。座席を選んで 1 タップ投票。6 票で IPPON |
-| **CAM** | `ippon_camera.html` | スマホカメラ映像を WebRTC（PeerJS）で MAIN に配信 |
-| **INDEX** | `index.html` | 各画面へのランチャー + QR コード |
+| **MAIN** | `web/main/` | 大画面用。待機画面 / お題 / 採点フレーム / IPPON 演出 / スコアボード / OP 動画 / 紹介画像 / カメラ映像を表示 |
+| **HOST** | `web/host/` | 司会・進行用。モード切替、お題出し、点数公開、スコア増減、SE（笑い・歓声・拍手・ブザー）、アジェンダ投影 |
+| **JUDGE** | `web/judge/` | 審査員用。座席を選んで 1 タップ投票。6 票で IPPON |
+| **CAM** | `web/camera/` | スマホカメラ映像を WebRTC（PeerJS）で MAIN に配信 |
+| **INDEX** | `web/index.html` | 各画面へのランチャー + QR コード |
 
 ### 進行フロー（1 問あたり）
 
@@ -37,16 +37,17 @@
 
 ## クイックスタート（現状：静的 HTML のみ）
 
-ビルド不要。任意の静的ホスティング（GitHub Pages など）に 5 つの HTML を置くだけで動きます。
+ビルド不要。`web/` ディレクトリを任意の静的ホスティング（GitHub Pages など）に置くだけで動きます。
+`main` への push で `web/` が GitHub Pages にデプロイされます（`.github/workflows/deploy-pages.yml`）。
 
 ```bash
 git clone https://github.com/75asa/ippon-gp.git
 cd ippon-gp
-python3 -m http.server 8080   # http://localhost:8080/index.html
+python3 -m http.server 8080 -d web   # http://localhost:8080/
 ```
 
 > ⚠️ **現状の制約**: 素材ファイル名・出演者名・お題が各 HTML にハードコードされています。
-> Firebase プロジェクトと Storage のベース URL は `config.js`（ひな形: `config.example.js`）で差し替えられます。
+> Firebase プロジェクトと Storage のベース URL は `web/config/config.js`（ひな形: `web/config/config.example.js`）で差し替えられます。
 > 残りを解消する「設定駆動化」が [ロードマップ](docs/ROADMAP.md) M1 の最優先事項です（#17, #18, #19）。
 
 ### 必要なもの
@@ -62,13 +63,17 @@ python3 -m http.server 8080   # http://localhost:8080/index.html
 
 ```
 .
-├── index.html              # ランチャー
-├── ippon_main.html         # 大画面
-├── ippon_host.html         # 司会操作
-├── ippon_judge.html        # 審査員投票
-├── ippon_camera.html       # カメラ配信
+├── web/                    # 公開ルート（GitHub Pages にはここだけデプロイ）
+│   ├── index.html          # ランチャー
+│   ├── main/               # 大画面
+│   ├── host/               # 司会操作
+│   ├── judge/              # 審査員投票
+│   ├── camera/             # カメラ配信
+│   ├── config/config.js    # Firebase 設定・Storage ベース URL（環境ごとに差し替え）
+│   └── ippon_*.html        # 旧 URL（配布済み QR）→ 新 URL へのリダイレクト
+├── firebase/               # RTDB セキュリティルール
+├── tests/rules/            # セキュリティルールのテスト（エミュレータ）
 ├── docs/                   # 設計・計画ドキュメント
-├── config.js               # Firebase 設定・Storage ベース URL（環境ごとに差し替え）
 ├── scripts/                # GitHub Projects のセットアップスクリプト
 └── .github/                # Issue/PR テンプレート、ラベル定義、ワークフロー
 ```

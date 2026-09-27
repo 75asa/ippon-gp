@@ -53,7 +53,7 @@
 ### 3.1 既知の設計課題
 
 - **単一ルート**: イベント（東京 / 関西）や「問」ごとの名前空間が無い。同時に 2 会場で使えない。
-- **セキュリティルールは M1 最小形のみ**: [`database.rules.json`](../database.rules.json) で「既知キーのみ・値の形・投票の上書き禁止」を検証している（意図と限界は [SECURITY_RULES.md](./SECURITY_RULES.md)）。全画面が未認証なので、正しい形なら誰でも `mode` / `scores` を書き換えられる点は残っており、HOST 認証（#36）・審査員トークン（#35）で対応する。
+- **セキュリティルールは M1 最小形のみ**: [`firebase/database.rules.json`](../firebase/database.rules.json) で「既知キーのみ・値の形・投票の上書き禁止」を検証している（意図と限界は [SECURITY_RULES.md](./SECURITY_RULES.md)）。全画面が未認証なので、正しい形なら誰でも `mode` / `scores` を書き換えられる点は残っており、HOST 認証（#36）・審査員トークン（#35）で対応する。
 - **状態遷移が暗黙的**: `showTaiki()` は `agenda` を削除 → HOST 側の `agenda` リスナーが `mode` を `previousMode` に戻す → その後 `mode='taiki'` を書く、という順序依存がある。競合するとモードが巻き戻る恐れ。
 - **`scores` の index 逆順** (`4 - pi`) が HOST / MAIN の両方に散らばっている。
 - **`answer_text` と `agenda` の二重経路**（テキスト投影 → 画像投影に切り替えた名残）。
@@ -111,13 +111,19 @@ HOST: 「点数を公開」 set(revealed,true) + no-ippon.mp3
 ## 9. To-Be（M1〜M2 で目指す形）
 
 ```
-config/
-  event.json        # 出演者・審査員・お題・閾値・テーマ
-  assets.json       # 素材マニフェスト（キー → URL）
-  firebase.js       # Firebase 設定（プロジェクトごとに差し替え）
-src/
-  shared/           # firebase 初期化、state machine、audio engine
-  main/ host/ judge/ camera/
+web/                  # 公開ルート（Pages にはここだけデプロイ。将来ビルドを入れる場合もここを root にする）
+  index.html
+  main/ host/ judge/ camera/   # 各画面（index.html）。旧 URL ippon_*.html はリダイレクト
+  config/
+    config.js         # Firebase 設定（プロジェクトごとに差し替え）※ 移行済み
+    event.json        # 出演者・審査員・お題・閾値・テーマ
+    assets.json       # 素材マニフェスト（キー → URL）
+  src/
+    shared/           # firebase 初期化、RTDB パス定義、素材解決、audio engine
+    main/ host/ judge/ camera/
+  vendor/             # 固定バージョンの外部ライブラリ
+firebase/             # RTDB / Storage ルール ※ 移行済み
+tests/                # rules/（移行済み）, e2e/
 ```
 
 - RTDB は `events/{eventId}/...` に名前空間化し、`config` は `events/{eventId}/config` にも複製（HOST の管理 UI から編集）。
