@@ -1,6 +1,6 @@
-# IPPON GP — 大喜利王決定戦 採点システム
+# SONG OGIRI GRAND PRIX — 大喜利王決定戦 採点システム
 
-![IPPON GP — プロジェクター・司会・審査員のスマホ・カメラをリアルタイムに同期する採点演出システム](docs/images/hero.png)
+![SONG OGIRI GRAND PRIX — プロジェクター・司会・審査員のスマホ・カメラをリアルタイムに同期する採点演出システム](docs/images/hero.png)
 
 > 社内フェス向け「IPPON グランプリ」パロディ企画のための、リアルタイム採点・演出システム。
 > 本リポジトリは [ryosuke884884-hash/ippon-gp](https://github.com/ryosuke884884-hash/ippon-gp) のフォークです。
