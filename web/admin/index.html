@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<script src="../config/config.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>設定 | SONG OGIRI GRAND PRIX</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f0eaf8;
+  --surface: #ffffff;
+  --ink: #1a0033;
+  --muted: #6f6680;
+  --line: #e3dbef;
+  --accent: #cc00ff;
+  --accent-dark: #7700cc;
+  --warn-bg: #fff4e0;
+  --warn-ink: #8a4b00;
+  --error: #c4002b;
+  --ok: #00866b;
+}
+body { background: var(--bg); color: var(--ink); font-family: 'Zen Kaku Gothic New', sans-serif; font-size: 15px; line-height: 1.6; padding: 32px 16px 64px; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.page { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.logo { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 2px; }
+.logo span { color: var(--accent); }
+.tagline { font-size: 10px; color: #aaa; letter-spacing: 3px; font-weight: 700; }
+.back { margin-left: auto; font-size: 13px; font-weight: 700; color: var(--muted); text-decoration: none; }
+.back:hover { color: var(--accent); }
+
+.card { background: var(--surface); border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+.card-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+h1 { font-family: 'Bebas Neue', sans-serif; font-size: 36px; letter-spacing: 2px; line-height: 1; }
+h1 small { font-family: 'Zen Kaku Gothic New', sans-serif; font-size: 15px; font-weight: 900; letter-spacing: 0; margin-left: 6px; }
+.pill { margin-left: auto; font-size: 12px; font-weight: 900; padding: 3px 12px; border-radius: 99px; background: var(--line); color: var(--muted); }
+.pill.dirty { background: var(--accent); color: #fff; }
+.pill.saved { background: #dff5ee; color: var(--ok); }
+.help { font-size: 13px; color: var(--muted); }
+.lock { font-size: 13px; font-weight: 700; background: var(--warn-bg); color: var(--warn-ink); border-radius: 10px; padding: 10px 14px; }
+
+ol { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.seat { display: grid; grid-template-columns: 36px minmax(0, 1fr) 124px auto; gap: 8px; align-items: center; }
+.num { font-family: 'Bebas Neue', sans-serif; font-size: 22px; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--ink); color: #fff; padding-top: 2px; }
+.seat.venue .num { background: #ddb8ff; color: var(--ink); }
+.seat input, .seat select { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: #fff; }
+.seat input[aria-invalid="true"] { border-color: var(--error); }
+.tools { display: flex; gap: 4px; }
+.icon { width: 34px; height: 36px; border: 1px solid var(--line); border-radius: 10px; background: #fff; cursor: pointer; font-weight: 900; color: var(--muted); }
+.icon:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.icon:disabled { opacity: .35; cursor: not-allowed; }
+
+.foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.count { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.btn { border: 0; border-radius: 99px; padding: 10px 22px; font-weight: 900; cursor: pointer; letter-spacing: .5px; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn.primary { background: var(--accent); color: #fff; }
+.btn.primary:hover:not(:disabled) { background: var(--accent-dark); }
+.btn.ghost { background: none; border: 1px solid var(--line); color: var(--ink); }
+.btn.link { background: none; padding: 10px 4px; color: var(--muted); text-decoration: underline; font-weight: 700; }
+.push { margin-left: auto; }
+.errors { font-size: 13px; color: var(--error); font-weight: 700; display: flex; flex-direction: column; gap: 2px; }
+.status { font-size: 13px; font-weight: 700; min-height: 1.6em; }
+.status.ok { color: var(--ok); }
+.status.error { color: var(--error); }
+
+@media (max-width: 520px) {
+  .seat { grid-template-columns: 36px minmax(0, 1fr) auto; }
+  .seat select { grid-column: 2; grid-row: 2; }
+  .tools { grid-column: 3; grid-row: 1 / span 2; flex-direction: column; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div class="logo">SONG <span>OGIRI</span> GRAND PRIX</div>
+    <div class="tagline">SETTINGS</div>
+    <a class="back" href="../">← ランチャーに戻る</a>
+  </header>
+
+  <section class="card" aria-labelledby="h-judges">
+    <div class="card-head">
+      <h1 id="h-judges">JUDGE <small>審査員</small></h1>
+      <span class="pill" id="state">読み込み中…</span>
+    </div>
+    <p class="help">並び順が審査員スマホの席の順番になります。名前はいつでも変えられます（投票中でも、入った票はずれません）。席の追加・削除・並べ替えは、票が入っていないときだけできます。</p>
+    <p class="lock" id="lock" hidden></p>
+    <ol id="list" aria-label="審査員の席"></ol>
+    <div class="foot">
+      <button class="btn ghost" id="add" type="button">＋ 席を追加</button>
+      <span class="count" id="count"></span>
+    </div>
+    <div class="errors" id="errors" role="alert"></div>
+    <div class="foot">
+      <button class="btn link" id="reset" type="button">初期値に戻す</button>
+      <button class="btn ghost push" id="discard" type="button">変更を取り消す</button>
+      <button class="btn primary" id="save" type="button">保存する</button>
+    </div>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+  </section>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
+import { getDatabase, ref, set, update, remove, onValue } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
+import { JUDGES_PATH, MIN_SEATS, MAX_SEATS, NAME_MAX, KINDS, judgesFromValue, judgesToRecord, validateJudges } from "../src/shared/judges.js";
+
+const app = initializeApp(window.IPPON_CONFIG.firebase);
+const db = getDatabase(app);
+
+let remote = null;        // { judges, isDefault }（RTDB の最新）
+let draft = [];           // 編集中の [{ name, kind }]
+let voteCount = 0;
+let loaded = { judges: false, votes: false };
+let saving = false;
+let resetArmedUntil = 0;
+
+const $ = (id) => document.getElementById(id);
+const clone = (list) => list.map(({ name, kind }) => ({ name, kind }));
+const same = (a, b) => a.length === b.length && a.every((j, i) => j.name === b[i].name && j.kind === b[i].kind);
+const isDirty = () => remote && !same(draft, clone(remote.judges));
+const locked = () => voteCount > 0;
+
+function setStatus(text, kind = '') {
+  const el = $('status');
+  el.textContent = text;
+  el.className = 'status' + (kind ? ' ' + kind : '');
+}
+
+function render() {
+  if (!loaded.judges || !loaded.votes) return;
+  const list = $('list');
+  const focused = document.activeElement?.dataset?.field ? { i: document.activeElement.dataset.i, field: document.activeElement.dataset.field, pos: document.activeElement.selectionStart } : null;
+  list.replaceChildren(...draft.map((j, i) => {
+    const li = document.createElement('li');
+    li.className = 'seat' + (j.kind === 'venue' ? ' venue' : '');
+    const num = document.createElement('span'); num.className = 'num'; num.textContent = i + 1; num.setAttribute('aria-hidden', 'true');
+    const input = document.createElement('input');
+    input.type = 'text'; input.value = j.name; input.maxLength = NAME_MAX; input.id = 'name-' + (i + 1);
+    input.dataset.i = i; input.dataset.field = 'name';
+    input.setAttribute('aria-label', `${i + 1} 番の名前`);
+    const bad = !j.name.trim();
+    input.setAttribute('aria-invalid', String(bad));
+    input.addEventListener('input', () => { draft[i].name = input.value; renderMeta(); input.setAttribute('aria-invalid', String(!input.value.trim())); });
+    const sel = document.createElement('select');
+    sel.id = 'kind-' + (i + 1); sel.dataset.i = i; sel.dataset.field = 'kind';
+    sel.setAttribute('aria-label', `${i + 1} 番の種別`);
+    for (const [value, label] of Object.entries(KINDS)) {
+      const o = document.createElement('option'); o.value = value; o.textContent = label; sel.appendChild(o);
+    }
+    sel.value = j.kind;
+    sel.addEventListener('change', () => { draft[i].kind = sel.value; render(); });
+    const tools = document.createElement('div'); tools.className = 'tools';
+    tools.append(
+      iconButton('↑', `${i + 1} 番を上へ`, locked() || i === 0, () => move(i, -1)),
+      iconButton('↓', `${i + 1} 番を下へ`, locked() || i === draft.length - 1, () => move(i, 1)),
+      iconButton('×', `${i + 1} 番を削除`, locked() || draft.length <= MIN_SEATS, () => { draft.splice(i, 1); render(); }),
+    );
+    li.append(num, input, sel, tools);
+    return li;
+  }));
+  if (focused) {
+    const el = list.querySelector(`[data-i="${focused.i}"][data-field="${focused.field}"]`);
+    if (el) { el.focus(); if (focused.pos != null && el.setSelectionRange) el.setSelectionRange(focused.pos, focused.pos); }
+  }
+  renderMeta();
+}
+
+function iconButton(text, label, disabled, onClick) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'icon'; b.textContent = text; b.disabled = disabled;
+  b.setAttribute('aria-label', label); b.title = label;
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+function move(i, d) {
+  const j = i + d;
+  [draft[i], draft[j]] = [draft[j], draft[i]];
+  render();
+}
+
+// 入力のたびに一覧を作り直さず、件数・状態・ボタンだけ更新する
+function renderMeta() {
+  const dirty = isDirty();
+  const pill = $('state');
+  if (remote.isDefault && !dirty) { pill.textContent = '初期値（未保存）'; pill.className = 'pill'; }
+  else if (dirty) { pill.textContent = '未保存の変更あり'; pill.className = 'pill dirty'; }
+  else { pill.textContent = '保存済み'; pill.className = 'pill saved'; }
+
+  $('count').textContent = `${draft.length} 席（${MIN_SEATS}〜${MAX_SEATS} 席）`;
+  $('add').disabled = locked() || draft.length >= MAX_SEATS;
+
+  const lock = $('lock');
+  lock.hidden = !locked();
+  if (locked()) {
+    lock.textContent = remote.isDefault
+      ? `いま ${voteCount} 票入っています。初めての保存は、HOST で投票をリセットしてから行ってください。`
+      : `いま ${voteCount} 票入っています。名前と種別は変えられますが、席の追加・削除・並べ替えは HOST で投票をリセットしてからにしてください。`;
+  }
+
+  const errors = validateJudges(draft);
+  if (locked() && draft.length !== remote.judges.length) errors.push('投票中は席の数を変えられません。変更を取り消すか、投票をリセットしてください。');
+  $('errors').replaceChildren(...errors.map(e => { const d = document.createElement('div'); d.textContent = e; return d; }));
+  $('save').disabled = saving || !dirty || errors.length > 0 || (locked() && remote.isDefault);
+  $('discard').disabled = saving || !dirty;
+  $('reset').disabled = saving || locked() || remote.isDefault;
+  if (Date.now() > resetArmedUntil) $('reset').textContent = '初期値に戻す';
+}
+
+async function save() {
+  const errors = validateJudges(draft);
+  if (errors.length) return;
+  saving = true; renderMeta(); setStatus('保存しています…');
+  try {
+    if (!locked()) {
+      await set(ref(db, JUDGES_PATH), judgesToRecord(draft));
+    } else {
+      // 投票中: 既にある席の名前・種別だけを書く（ルールもこれだけを許可している）
+      const updates = {};
+      draft.forEach((j, i) => { updates[`${i + 1}/name`] = j.name.trim(); updates[`${i + 1}/kind`] = j.kind; });
+      await update(ref(db, JUDGES_PATH), updates);
+    }
+    setStatus('保存しました。審査員のスマホにすぐ反映されます。', 'ok');
+  } catch (e) {
+    setStatus('保存できませんでした。' + (locked() ? '保存の直前に票が入った可能性があります。席の数や並びを変えていないか確認してください。' : '通信状態を確認して、もう一度保存してください。') + `（${e.code || e.message}）`, 'error');
+  } finally {
+    saving = false; renderMeta();
+  }
+}
+
+// 誤操作防止のため 2 回押しで実行する
+async function resetToDefault() {
+  if (Date.now() > resetArmedUntil) {
+    resetArmedUntil = Date.now() + 4000;
+    $('reset').textContent = 'もう一度押すと初期値に戻します';
+    setTimeout(renderMeta, 4100);
+    return;
+  }
+  resetArmedUntil = 0;
+  saving = true; renderMeta(); setStatus('初期値に戻しています…');
+  try {
+    await remove(ref(db, JUDGES_PATH));
+    setStatus('初期値に戻しました。', 'ok');
+  } catch (e) {
+    setStatus(`初期値に戻せませんでした。票が入っていないか確認してください。（${e.code || e.message}）`, 'error');
+  } finally {
+    saving = false; renderMeta();
+  }
+}
+
+$('add').addEventListener('click', () => {
+  draft.push({ name: `会場審査員${draft.filter(j => j.kind === 'venue').length + 1}`, kind: 'venue' });
+  render();
+  $('name-' + draft.length)?.focus();
+});
+$('save').addEventListener('click', save);
+$('discard').addEventListener('click', () => { draft = clone(remote.judges); setStatus(''); render(); });
+$('reset').addEventListener('click', resetToDefault);
+window.addEventListener('beforeunload', (e) => { if (isDirty()) e.preventDefault(); });
+
+onValue(ref(db, JUDGES_PATH), (snap) => {
+  const wasDirty = remote && isDirty();
+  remote = judgesFromValue(snap.val());
+  loaded.judges = true;
+  // 編集中でなければ最新を取り込む。編集中なら上書きせずに知らせる
+  if (!wasDirty) draft = clone(remote.judges);
+  else if (!saving) setStatus('他の端末で審査員の設定が変わりました。「変更を取り消す」で最新を読み込めます。', 'error');
+  render();
+});
+onValue(ref(db, 'votes'), (snap) => {
+  voteCount = Object.keys(snap.val() || {}).length;
+  loaded.votes = true;
+  render();
+});
+</script>
+</body>
+</html>

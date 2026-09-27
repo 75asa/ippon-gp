@@ -26,6 +26,7 @@
 | **JUDGE** | `web/judge/` | 審査員用。座席を選んで 1 タップ投票。6 票で IPPON |
 | **CAM** | `web/camera/` | スマホカメラ映像を WebRTC（PeerJS）で MAIN に配信 |
 | **INDEX** | `web/index.html` | 各画面へのランチャー + QR コード |
+| **ADMIN** | `web/admin/` | 設定画面。審査員の名前・種別・定員（6〜10 席）を編集すると、審査員のスマホに即時反映 |
 
 ### 進行フロー（1 問あたり）
 
@@ -71,6 +72,8 @@ python3 -m http.server 8080 -d web   # http://localhost:8080/
 │   ├── host/               # 司会操作
 │   ├── judge/              # 審査員投票
 │   ├── camera/             # カメラ配信
+│   ├── admin/              # 設定画面（審査員など）
+│   ├── src/shared/         # 画面間で共有するモジュール（審査員の定義など）
 │   ├── config/config.js    # Firebase 設定・Storage ベース URL（環境ごとに差し替え）
 │   └── ippon_*.html        # 旧 URL（配布済み QR）→ 新 URL へのリダイレクト
 ├── firebase/               # RTDB セキュリティルール

@@ -25,9 +25,37 @@
       /* ノードごと削除（HOST の resetVotes / モード切替）は許可。中身の一括書き込みは $seat の検証を通る */
       ".write": "!newData.exists()",
       "$seat": {
-        /* 新規作成のみ。既存票の上書き・個別削除は不可 */
+        /* 新規作成のみ。既存票の上書き・個別削除は不可。
+           席は settings/judges にある席だけ（設定が無ければ従来どおり 1..10） */
         ".write": "!data.exists() && newData.exists()",
-        ".validate": "$seat.matches(/^([1-9]|10)$/) && newData.val() === true"
+        ".validate": "$seat.matches(/^([1-9]|10)$/) && newData.val() === true && (!root.child('settings/judges').exists() || root.child('settings/judges').hasChild($seat))"
+      }
+    },
+
+    "settings": {
+      /* 設定画面（web/admin/）が書く。形は web/src/shared/judges.js と揃える */
+      "judges": {
+        /* 席の追加・削除・並べ替え・初期値に戻す（ノードごとの置き換え / 削除）は、票が入っていないときだけ */
+        ".write": "!root.child('votes').exists()",
+        /* 1..6 席は必須（下限 = IPPON に必要な票数）、7..10 席は連番 */
+        ".validate": "newData.hasChildren(['1', '2', '3', '4', '5', '6']) && (!newData.hasChild('8') || newData.hasChild('7')) && (!newData.hasChild('9') || newData.hasChild('8')) && (!newData.hasChild('10') || newData.hasChild('9'))",
+        "$seat": {
+          ".validate": "$seat.matches(/^([1-9]|10)$/) && newData.hasChildren(['name', 'kind'])",
+          /* 既にある席の名前・種別は投票中でも変えられる（席番号は変わらないので票はずれない） */
+          "name": {
+            ".write": "data.exists() && newData.exists()",
+            ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 20 && newData.val().matches(/^\\S(.*\\S)?$/)"
+          },
+          "kind": {
+            ".write": "data.exists() && newData.exists()",
+            ".validate": "newData.isString() && newData.val().matches(/^(panel|venue)$/)"
+          },
+          "$other": { ".validate": false }
+        }
+      },
+      "$other": {
+        ".write": false,
+        ".validate": false
       }
     },
 

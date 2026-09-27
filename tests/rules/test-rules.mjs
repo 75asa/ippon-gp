@@ -49,7 +49,13 @@ async function resetDb() {
 const ALLOW = 'allow';
 const DENY = 'deny';
 const put = (path, body) => ({ method: 'PUT', path, body });
+const patch = (path, body) => ({ method: 'PATCH', path, body });
 const del = (path) => ({ method: 'DELETE', path });
+
+// settings/judges の値を作る（席 1..n、7 席目以降は会場審査員）
+const judges = (n) => Object.fromEntries(
+  Array.from({ length: n }, (_, i) => [String(i + 1), { name: `J${i + 1}`, kind: i >= 6 ? 'venue' : 'panel' }]),
+);
 
 // [説明, リクエスト, 期待] の順に実行する。前のケースの結果に依存するものは順番を入れ替えない。
 const cases = [
@@ -132,6 +138,45 @@ const cases = [
   ['camera_room = オブジェクトは拒否', put('/camera_room', { id: 'x' }), DENY],
   ['camera_room の削除（CAM 停止）は許可', del('/camera_room'), ALLOW],
 
+  // settings/judges（設定画面）。ここに来た時点で votes は空
+  ['settings/judges 8 席は許可', put('/settings/judges', judges(8)), ALLOW],
+  ['settings/judges 5 席は下限未満で拒否', put('/settings/judges', judges(5)), DENY],
+  ['settings/judges 11 席は上限超えで拒否', put('/settings/judges', judges(11)), DENY],
+  ['settings/judges 席番号の欠け（1..6, 8）は拒否', put('/settings/judges', { ...judges(6), 8: { name: 'X', kind: 'venue' } }), DENY],
+  ['settings/judges 名前が空だと拒否', put('/settings/judges', { ...judges(6), 1: { name: '', kind: 'panel' } }), DENY],
+  ['settings/judges 名前 21 文字は拒否', put('/settings/judges', { ...judges(6), 1: { name: 'a'.repeat(21), kind: 'panel' } }), DENY],
+  ['settings/judges 名前の前後に空白があると拒否', put('/settings/judges', { ...judges(6), 1: { name: ' KIHARA', kind: 'panel' } }), DENY],
+  ['settings/judges 名前が数値だと拒否', put('/settings/judges', { ...judges(6), 1: { name: 1, kind: 'panel' } }), DENY],
+  ['settings/judges 種別が未知だと拒否', put('/settings/judges', { ...judges(6), 1: { name: 'A', kind: 'boss' } }), DENY],
+  ['settings/judges 席に余計なフィールドがあると拒否', put('/settings/judges', { ...judges(6), 1: { name: 'A', kind: 'panel', x: 1 } }), DENY],
+  ['settings/judges 日本語名 20 文字は許可', put('/settings/judges', { ...judges(8), 1: { name: 'あ'.repeat(20), kind: 'panel' } }), ALLOW],
+  ['settings/judges 席 6 を消すと下限割れで拒否', del('/settings/judges/6'), DENY],
+  ['settings/judges 末尾の席 8 を消すのは許可', del('/settings/judges/8'), ALLOW],
+  ['settings/judges を 8 席に戻す', put('/settings/judges', judges(8)), ALLOW],
+  ['settings の未知キーは拒否', put('/settings/theme', 'dark'), DENY],
+
+  // 設定があるときの投票: 設定にある席だけ
+  ['votes/9 は設定に無い席なので拒否', put('/votes/9', true), DENY],
+  ['votes/8 は設定にある席なので許可', put('/votes/8', true), ALLOW],
+
+  // 票が入っている間は、席の構成は変えられないが名前・種別は変えられる
+  ['投票中に settings/judges を置き換えるのは拒否', put('/settings/judges', judges(9)), DENY],
+  ['投票中に settings/judges を消すのは拒否', del('/settings/judges'), DENY],
+  ['投票中に席 9 を追加するのは拒否', put('/settings/judges/9', { name: 'J9', kind: 'venue' }), DENY],
+  ['投票中に席 9 の名前だけ作るのも拒否', put('/settings/judges/9/name', 'J9'), DENY],
+  ['投票中に末尾の席 8 を消すのは拒否', del('/settings/judges/8'), DENY],
+  ['投票中でも席 3 の名前は変えられる', put('/settings/judges/3/name', 'SHIBUTANI'), ALLOW],
+  ['投票中でも席 3 の種別は変えられる', put('/settings/judges/3/kind', 'venue'), ALLOW],
+  ['投票中でも名前・種別の一括更新はできる', patch('/settings/judges', { '1/name': 'KIHARA', '2/name': 'HARADA', '3/kind': 'panel' }), ALLOW],
+  ['投票中でも不正な名前には変えられない', put('/settings/judges/3/name', ''), DENY],
+  ['席 3 の名前の削除は拒否', del('/settings/judges/3/name'), DENY],
+
+  // 票をリセットすれば初期値に戻せる。設定が無ければ従来どおり 1..10 に投票できる
+  ['votes を消す', del('/votes'), ALLOW],
+  ['票が無ければ settings/judges を消せる（初期値に戻す）', del('/settings/judges'), ALLOW],
+  ['設定が無いときは votes/10 に投票できる', put('/votes/10', true), ALLOW],
+  ['後片付け: votes を消す', del('/votes'), ALLOW],
+
   // 読み取り
   ['ルートの読み取りは誰でも可', { method: 'GET', path: '/' }, ALLOW],
 ];
@@ -152,7 +197,7 @@ for (const [name, req, expected] of cases) {
   const actual = classify(status, text);
   const ok = actual === expected;
   ok ? pass++ : fail++;
-  console.log(`${ok ? 'PASS' : 'FAIL'}  ${req.method.padEnd(6)} ${req.path.padEnd(14)} -> ${String(status).padEnd(3)} ${expected.padEnd(5)} ${name}${ok ? '' : `  (got ${actual})`}`);
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${req.method.padEnd(6)} ${req.path.padEnd(24)} -> ${String(status).padEnd(3)} ${expected.padEnd(5)} ${name}${ok ? '' : `  (got ${actual})`}`);
 }
 console.log(`\n${pass} passed, ${fail} failed, ${cases.length} total`);
 process.exit(fail === 0 ? 0 : 1);
