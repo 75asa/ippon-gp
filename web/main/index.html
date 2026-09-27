@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script src="../config/config.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>IPPON GRAND PRIX</title>
+<title>SONG OGIRI GRAND PRIX</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: #000; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; position: relative; }
@@ -431,7 +431,7 @@ const STICKS = 10;
 function renderScoreboard(scores) {
   const sb = document.getElementById('scoreboard');
   sb.innerHTML = `
-<div style="width:100%;height:80px;background:#A100FF;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><div style="color:#fff;font-size:52px;font-weight:900;letter-spacing:0.15em;text-align:center;text-shadow: 0 0 10px #fff, 0 0 20px #fff, 0 0 40px #c084fc, 0 0 80px #c084fc;">SONG ŌGIRI GRAND PRIX</div></div><div class="sb-stage" style="display:flex;flex-direction:row;align-items:flex-start;justify-content:center;gap:40px;width:100%;padding:4px 16px 0;height:904px;overflow:visible;">` + sbPlayers.map((p, pi) => {
+<div style="width:100%;height:80px;background:#A100FF;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><div style="color:#fff;font-size:52px;font-weight:900;letter-spacing:0.15em;text-align:center;text-shadow: 0 0 10px #fff, 0 0 20px #fff, 0 0 40px #c084fc, 0 0 80px #c084fc;">SONG OGIRI GRAND PRIX</div></div><div class="sb-stage" style="display:flex;flex-direction:row;align-items:flex-start;justify-content:center;gap:40px;width:100%;padding:4px 16px 0;height:904px;overflow:visible;">` + sbPlayers.map((p, pi) => {
     const sc = scores[4 - pi] || 0;
     const lit = sc % STICKS === 0 && sc > 0 ? STICKS : sc % STICKS;
     const tubes = Array.from({length: STICKS}, (_, i) => `
