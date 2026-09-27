@@ -4,16 +4,16 @@
 // ひな形: config.example.js
 window.IPPON_CONFIG = {
   firebase: {
-    apiKey: "AIzaSyC-mISssQxyO67vl3JxbbBktqXoDvmGLdk",
-    authDomain: "song-fes-ippon-gp.firebaseapp.com",
-    databaseURL: "https://song-fes-ippon-gp-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "song-fes-ippon-gp",
-    storageBucket: "song-fes-ippon-gp.firebasestorage.app",
-    messagingSenderId: "727959135173",
-    appId: "1:727959135173:web:5d983f22d1164a11a6e1ac"
+    apiKey: "AIzaSyB2z2bmt99MBu2tqRJbAQqTRkM0cImnZp0",
+    authDomain: "song-ogiri-gp.firebaseapp.com",
+    databaseURL: "https://song-ogiri-gp-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "song-ogiri-gp",
+    storageBucket: "song-ogiri-gp.firebasestorage.app",
+    messagingSenderId: "286637315309",
+    appId: "1:286637315309:web:2747142f5166b1e56ce8e4"
   },
   // Firebase Storage のオブジェクト URL のベース。末尾は "/o/" で終わること
-  storageBase: "https://firebasestorage.googleapis.com/v0/b/song-fes-ippon-gp.firebasestorage.app/o/",
+  storageBase: "https://firebasestorage.googleapis.com/v0/b/song-ogiri-gp.firebasestorage.app/o/",
   // CAM → MAIN の映像設定（任意。省略時は 1080p / 30fps / 6Mbps 上限 / 解像度優先）
   camera: {
     width: 1920, height: 1080, frameRate: 30,
