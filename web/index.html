@@ -93,7 +93,7 @@ header {
 </header>
 
 <div class="grid">
-  <div class="card main" onclick="window.open('ippon_main.html','_blank')">
+  <div class="card main" onclick="window.open('main/','_blank')">
     <div class="card-tag">DISPLAY</div>
     <div class="card-name">MAIN</div>
     <div class="card-desc">大画面・プロジェクター用</div>
@@ -132,7 +132,7 @@ header {
   <div class="modal" onclick="event.stopPropagation()">
     <h2>HOST</h2>
     <div id="qr-host"></div>
-    <a class="modal-open" href="ippon_host.html" target="_blank">OPEN →</a>
+    <a class="modal-open" href="host/" target="_blank">OPEN →</a>
     <div class="modal-close" onclick="document.getElementById('modal-host').classList.remove('show')">閉じる</div>
   </div>
 </div>
@@ -141,7 +141,7 @@ header {
   <div class="modal" onclick="event.stopPropagation()">
     <h2>JUDGE</h2>
     <div id="qr-judge"></div>
-    <a class="modal-open" href="ippon_judge.html" target="_blank">OPEN →</a>
+    <a class="modal-open" href="judge/" target="_blank">OPEN →</a>
     <div class="modal-close" onclick="document.getElementById('modal-judge').classList.remove('show')">閉じる</div>
   </div>
 </div>
@@ -150,29 +150,29 @@ header {
   <div class="modal" onclick="event.stopPropagation()">
     <h2>CAMERA</h2>
     <div id="qr-camera"></div>
-    <a class="modal-open" href="ippon_camera.html" target="_blank">OPEN →</a>
+    <a class="modal-open" href="camera/" target="_blank">OPEN →</a>
     <div class="modal-close" onclick="document.getElementById('modal-camera').classList.remove('show')">閉じる</div>
   </div>
 </div>
 
 <script>
-// このページと同じディレクトリにある各画面の絶対 URL（フォーク / ローカル / どのホスティングでも正しく動く）
+// このページからの相対パスにある各画面の絶対 URL（フォーク / ローカル / どのホスティングでも正しく動く）
 function pageUrl(file) { return new URL(file, location.href).href; }
 const REPO_URL = 'https://github.com/75asa/ippon-gp';
 document.getElementById('repo-link').href = REPO_URL;
 
 new QRCode(document.getElementById('qr-host'), {
-  text: pageUrl('ippon_host.html'),
+  text: pageUrl('host/'),
   width: 200, height: 200, colorDark: '#1a0033', colorLight: '#ffffff',
   correctLevel: QRCode.CorrectLevel.M
 });
 new QRCode(document.getElementById('qr-judge'), {
-  text: pageUrl('ippon_judge.html'),
+  text: pageUrl('judge/'),
   width: 200, height: 200, colorDark: '#1a0033', colorLight: '#ffffff',
   correctLevel: QRCode.CorrectLevel.M
 });
 new QRCode(document.getElementById('qr-camera'), {
-  text: pageUrl('ippon_camera.html'),
+  text: pageUrl('camera/'),
   width: 200, height: 200, colorDark: '#003322', colorLight: '#ffffff',
   correctLevel: QRCode.CorrectLevel.M
 });

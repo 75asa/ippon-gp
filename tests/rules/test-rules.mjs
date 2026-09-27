@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // database.rules.json を Realtime Database エミュレータに対して検証する。
 // 使い方（エミュレータの起動〜停止まで込み）:
-//   npx firebase emulators:exec --only database --project demo-ippon "node scripts/test-rules.mjs"
+//   npx firebase emulators:exec --only database --project demo-ippon "node tests/rules/test-rules.mjs"
 // もしくは別ターミナルで `firebase emulators:start --only database --project demo-ippon` を起動しておき
-//   node scripts/test-rules.mjs
+//   node tests/rules/test-rules.mjs
 // エミュレータ jar を直接起動した等でルールが未ロードの場合は `--load-rules` を付けると
 // database.rules.json を（CLI と同じ手順で）エミュレータに流し込んでから検証する。
 // 環境変数: FIREBASE_DATABASE_EMULATOR_HOST（既定 localhost:9000）, GCLOUD_PROJECT（既定 demo-ippon）
@@ -27,7 +27,7 @@ async function rest(method, path, body) {
 
 // エミュレータの管理者トークン（owner）でルールを流し込む（firebase CLI の updateRules と同じ）。
 async function loadRules() {
-  const rulesPath = new URL('../database.rules.json', import.meta.url);
+  const rulesPath = new URL('../../firebase/database.rules.json', import.meta.url);
   const res = await fetch(`${base}/.settings/rules.json?ns=${ns}`, {
     method: 'PUT',
     headers: { Authorization: 'Bearer owner' },

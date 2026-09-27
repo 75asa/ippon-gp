@@ -1,6 +1,6 @@
 # Realtime Database セキュリティルール
 
-`database.rules.json` は現行のフラットスキーマ（[ARCHITECTURE.md §3](./ARCHITECTURE.md#3-rtdb-スキーマルート直下フラット)）に対する **M1 最小形** のルールです。
+`firebase/database.rules.json` は現行のフラットスキーマ（[ARCHITECTURE.md §3](./ARCHITECTURE.md#3-rtdb-スキーマルート直下フラット)）に対する **M1 最小形** のルールです。
 各画面（MAIN / HOST / JUDGE / CAM）のコードは一切変更せず、**未認証クライアントのまま**動く前提で書いてあります。
 
 ## 1. 前提: 全クライアントが未認証
@@ -51,14 +51,14 @@ firebase deploy --only database --project <your-project-id>
 # もしくは一度 firebase use <your-project-id> しておけば --project は省略可
 ```
 
-`firebase.json` の `database.rules` が `database.rules.json` を指しているので、これだけで RTDB のルールが置き換わります。
+`firebase.json` の `database.rules` が `firebase/database.rules.json` を指しているので、これだけで RTDB のルールが置き換わります。
 Firebase コンソールの「Realtime Database → ルール」で反映を確認できます。
 
 > 注意: デプロイするとコンソール上で手編集したルールは上書きされます。以後はこのファイルを正としてください。
 
 ## 4. ローカルで検証する（エミュレータ）
 
-`scripts/test-rules.mjs` は RTDB エミュレータに対して、各画面と同じ **未認証** の REST 書き込みを 60 件ほど投げ、
+`tests/rules/test-rules.mjs` は RTDB エミュレータに対して、各画面と同じ **未認証** の REST 書き込みを 60 件ほど投げ、
 許可 / 拒否が期待通りかを確認します。Node 22 以上（グローバル `fetch`）と Java（エミュレータ用）が必要で、追加の npm 依存はありません。
 
 ### 4.1 firebase CLI 経由（通常はこちら）
@@ -66,11 +66,11 @@ Firebase コンソールの「Realtime Database → ルール」で反映を確�
 ```bash
 npm i -g firebase-tools   # もしくはリポジトリ内で npm i --no-save firebase-tools して npx
 # エミュレータ起動 → スクリプト実行 → 停止 までを一発で
-firebase emulators:exec --only database --project demo-ippon "node scripts/test-rules.mjs"
+firebase emulators:exec --only database --project demo-ippon "node tests/rules/test-rules.mjs"
 ```
 
 `demo-` で始まるプロジェクト ID はオフライン専用の扱いになり、ログイン不要・本番に触りません。
-別ターミナルで `firebase emulators:start --only database --project demo-ippon` を起動しておき、`node scripts/test-rules.mjs` を直接叩いても同じです。
+別ターミナルで `firebase emulators:start --only database --project demo-ippon` を起動しておき、`node tests/rules/test-rules.mjs` を直接叩いても同じです。
 
 ### 4.2 エミュレータ jar を直接起動する（CLI がプロキシ等で使えない環境）
 
@@ -81,7 +81,7 @@ CLI は `HTTPS_PROXY` が設定されているとその localhost 呼び出し�
 ```bash
 JAR=~/.cache/firebase/emulators/firebase-database-emulator-v*.jar   # emulators:start を一度走らせるとここに落ちる
 java -Duser.language=en -jar $JAR --host 127.0.0.1 --port 9000 &
-FIREBASE_DATABASE_EMULATOR_HOST=127.0.0.1:9000 GCLOUD_PROJECT=demo-ippon node scripts/test-rules.mjs --load-rules
+FIREBASE_DATABASE_EMULATOR_HOST=127.0.0.1:9000 GCLOUD_PROJECT=demo-ippon node tests/rules/test-rules.mjs --load-rules
 kill %1
 ```
 
@@ -101,5 +101,5 @@ PASS  PUT    /votes/1       -> 401 deny  votes/1 の上書き（再投票）は�
 
 ## 5. スキーマを変えるとき
 
-- `docs/ARCHITECTURE.md §3` のキー表を更新したら、必ず `database.rules.json` と `scripts/test-rules.mjs` のケースも同時に更新してください。ルールに無いキーは書けません。
+- `docs/ARCHITECTURE.md §3` のキー表を更新したら、必ず `firebase/database.rules.json` と `tests/rules/test-rules.mjs` のケースも同時に更新してください。ルールに無いキーは書けません。
 - 名前空間化（`/events/{id}/...`、#6 / M2）の際はルート直下の各キーをそのまま `$eventId` の下にぶら下げれば流用できます。
