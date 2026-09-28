@@ -196,7 +196,7 @@ h1 { color: #f5c400; font-size: 14px; letter-spacing: 2px; margin-bottom: 6px; }
 import { initializeApp, getDatabase, ref, set, remove, onValue, get } from '../src/shared/firebase.js';
 import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue, voteStep } from '../src/shared/ippon.js';
 import { PLAYERS_PATH, PLAYER_COUNT, playerAt, scoreIndex, playersFromValue } from '../src/shared/players.js';
-import { formatQualityRecord } from '../src/shared/webrtc-stats.js';
+import { formatQualityRecord, isQualityStale } from '../src/shared/webrtc-stats.js';
 
 const STORAGE_BASE = window.IPPON_CONFIG.storageBase;
 
@@ -414,16 +414,31 @@ function playNextInQueue() {
   setTimeout(playNextInQueue, 50);
 }
 
-// 配信品質（#63）。MAIN が変化時のみ低頻度で書く camera_quality を表示。qualityLimitationReason が
-// bandwidth / cpu のときは赤くして、原因の切り分けを促す（詳しくは docs/RUNBOOK.md・REHEARSAL.md）
-onValue(ref(db, 'camera_quality'), (snap) => {
-  const q = snap.val();
+// 配信品質（#63）。MAIN が変化時 + heartbeat で書く camera_quality を表示。qualityLimitationReason が
+// bandwidth / cpu のときは赤くして、原因の切り分けを促す（詳しくは docs/RUNBOOK.md・REHEARSAL.md）。
+// MAIN が消し忘れた・落ちた等で古い値が残っても、ts（サーバー時刻）が古ければ「更新なし」に倒す。
+// MAIN / HOST それぞれのクライアント時計のズレに影響されないよう、サーバー時刻オフセットで揃えて比較する
+let serverTimeOffset = 0;
+let latestCameraQuality = null;
+
+function renderCameraQuality() {
   const el = document.getElementById('camera-quality-label');
+  const q = latestCameraQuality;
   if (!q) { el.textContent = '未接続'; el.style.color = '#888'; return; }
+  const serverNow = Date.now() + serverTimeOffset;
+  if (isQualityStale(q.ts, serverNow)) {
+    el.textContent = '更新なし（配信が切れている可能性）';
+    el.style.color = '#888';
+    return;
+  }
   const bad = q.limit === 'bandwidth' || q.limit === 'cpu';
   el.textContent = formatQualityRecord(q) || '未接続';
   el.style.color = bad ? '#ff5555' : '#8f8';
-});
+}
+onValue(ref(db, '.info/serverTimeOffset'), (snap) => { serverTimeOffset = snap.val() || 0; });
+onValue(ref(db, 'camera_quality'), (snap) => { latestCameraQuality = snap.val(); renderCameraQuality(); });
+// camera_quality への書き込みが止まった後も古さの判定が進むよう、データが変わらなくても定期的に再評価する
+setInterval(renderCameraQuality, 3000);
 
 // 投票数監視（50msデバウンス）
 let voteDebounce = null;

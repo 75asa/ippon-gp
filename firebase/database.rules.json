@@ -140,8 +140,12 @@
     },
 
     "camera_quality": {
-      /* 配信品質の要約（#63）。MAIN が受信側の getStats() から低頻度（変化時のみ・5 秒間隔目安）で書く。
-         HOST がここを見て「CAM: 1080p 4.2Mbps」のように表示する。削除（カメラ停止時）も許可 */
+      /* 配信品質の要約（#63）。MAIN が受信側の getStats() から低頻度（変化時、または前回の書き込みから
+         10 秒経った heartbeat のときだけ・5 秒間隔目安）で書く。ts はサーバー時刻（{'.sv':'timestamp'}）
+         で書くので、HOST は MAIN との時計のズレに関係なく古さ（配信切れ）を判定できる。
+         HOST がここを見て「CAM: 1080p 4.2Mbps」のように表示する。
+         削除は、MAIN の disconnectCamera() / 接続断（connectionstatechange）/ camera_room 消失 / onDisconnect
+         のいずれでも起きる。値を残さず消せるよう常に許可 */
       ".write": true,
       ".validate": "newData.hasChildren(['res', 'fps', 'kbps', 'codec', 'limit', 'path', 'ts'])",
       "res":   { ".validate": "newData.isString() && newData.val().matches(/^[1-9][0-9]{0,4}x[1-9][0-9]{0,4}$/)" },

@@ -87,6 +87,36 @@ export function shortCodec(mime) {
   return String(mime).replace(/^video\//i, '').toUpperCase();
 }
 
+const DEAD_CONNECTION_STATES = new Set(['disconnected', 'failed', 'closed']);
+
+/**
+ * RTCPeerConnection の connectionState の変化を見て、
+ * 初めて 'connected' になったら onConnected() を、'disconnected' / 'failed' / 'closed' になったら
+ * onDisconnected() を呼ぶ。pc がすでに 'connected' / 切断済みなら登録した時点で即座に呼ぶ。
+ *
+ * `{ once: true }` は使わない: 最初に発火する connectionstatechange は 'connecting' 等が多く、
+ * once だとそこで listener が外れて 'connected' を一生観測できなくなる（#94 で実際に起きた回帰）。
+ * onConnected は 1 回だけ呼ぶが、その後も onDisconnected の監視は続ける。
+ * 戻り値の関数で監視を止められる（以後どちらのコールバックも呼ばれない）。
+ */
+export function watchConnectionState(pc, { onConnected, onDisconnected } = {}) {
+  let connectedFired = false;
+  let stopped = false;
+  const handleChange = () => {
+    if (stopped) return;
+    const state = pc.connectionState;
+    if (!connectedFired && state === 'connected') {
+      connectedFired = true;
+      if (onConnected) onConnected();
+    } else if (DEAD_CONNECTION_STATES.has(state)) {
+      if (onDisconnected) onDisconnected();
+    }
+  };
+  pc.addEventListener('connectionstatechange', handleChange);
+  handleChange(); // 登録時点で既に connected / 切断済みなら、イベントを待たずに即反映する
+  return () => { stopped = true; pc.removeEventListener('connectionstatechange', handleChange); };
+}
+
 /**
  * getStats を定期的に見て、品質サンプル { width, height, fps, kbps, codec, limit } を渡す。
  * pc.connectionState が 'closed' になったら止まる。戻り値の関数で途中で止められる。
@@ -201,4 +231,14 @@ export function qualityRecordEquals(a, b, { fpsTolerance = 2, kbpsTolerance = 20
     && (a.path || 'unknown') === (b.path || 'unknown')
     && Math.abs((a.fps || 0) - (b.fps || 0)) <= fpsTolerance
     && Math.abs((a.kbps || 0) - (b.kbps || 0)) <= kbpsTolerance;
+}
+
+/**
+ * camera_quality の ts が古すぎる（配信が切れているのに値だけ残っている）かどうか。
+ * ts / serverNow はどちらも「サーバー時刻」基準の ms（HOST 側は Date.now() + .info/serverTimeOffset で見積もる）。
+ * ts が数値でなければ古い扱い（未接続と同じ表示にする）。
+ */
+export function isQualityStale(ts, serverNow, staleMs = 15000) {
+  if (typeof ts !== 'number' || typeof serverNow !== 'number') return true;
+  return serverNow - ts > staleMs;
 }

@@ -382,9 +382,9 @@ body { background: #000; display: flex; align-items: center; justify-content: ce
 </div>
 
 <script type="module">
-import { initializeApp, getDatabase, ref, onValue, remove, set, get } from "../src/shared/firebase.js";
+import { initializeApp, getDatabase, ref, onValue, onDisconnect, remove, set, get } from "../src/shared/firebase.js";
 import { CODEC_DEFAULTS, preferCodec, setBitrateHints } from "../src/shared/sdp.js";
-import { watchQuality, formatQuality, toQualityRecord, qualityRecordEquals } from "../src/shared/webrtc-stats.js";
+import { watchQuality, watchConnectionState, formatQuality, toQualityRecord, qualityRecordEquals } from "../src/shared/webrtc-stats.js";
 import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue, voteStep } from "../src/shared/ippon.js";
 import { PLAYERS_PATH, PLAYER_COUNT, playerAt, scoreIndex, playersFromValue, escapeHtml } from "../src/shared/players.js";
 
@@ -401,6 +401,7 @@ let cameraConnectedRoomId = null;
 let camLimit = 'none';
 let latestMainQuality = null; // { width, height, fps, kbps, codec, path } （watchQuality の生の出力。limit は camLimit 側を使う）
 let lastPublishedQuality = null; // 直前に camera_quality へ書いた record（比較用。ts は無視）
+let lastPublishedAt = 0; // 直前に書いた時刻（変化が無くても、HOST の古さ判定用に一定間隔で書き直す）
 const mainQualityWatchers = new Set();
 
 function mergedQuality() {
@@ -430,28 +431,49 @@ function resetQuality() {
   camLimit = 'none';
   latestMainQuality = null;
   lastPublishedQuality = null;
+  lastPublishedAt = 0;
   renderQualityStatus();
 }
+// 配信が切れた（呼が切れた・camera_room が消えた・ローカルソースに切替）ときに、HOST に古い値を残さない
+function clearQuality() {
+  resetQuality();
+  remove(ref(db, 'camera_quality'));
+}
 
-// 値が変わったときだけ、5 秒間隔目安で HOST 用に書く（毎回は書かない）
+// MAIN 自身がリロード・クラッシュした場合に備えて、接続が上がるたびに「切れたら camera_quality を消す」を登録し直す
+// （onDisconnect は再接続ごとに再登録が必要。.info/connected は db 初期化後の onValue で監視する）
+function registerQualityDisconnectCleanup() {
+  onDisconnect(ref(db, 'camera_quality')).remove().catch(() => {});
+}
+
+// 変化したとき、または前回の書き込みから一定時間（heartbeat）が経ったときだけ HOST 用に書く。
+// heartbeat が無いと「値が変わらない = 何も書かない」ため、HOST 側で ts の古さから切断を判定できない
 setInterval(() => {
   const record = toQualityRecord(mergedQuality(), Date.now());
   if (!record) return;
-  if (lastPublishedQuality && qualityRecordEquals(lastPublishedQuality, record)) return;
+  const changed = !lastPublishedQuality || !qualityRecordEquals(lastPublishedQuality, record);
+  const heartbeatDue = Date.now() - lastPublishedAt >= 10000;
+  if (!changed && !heartbeatDue) return;
   lastPublishedQuality = record;
-  set(ref(db, 'camera_quality'), record);
+  lastPublishedAt = Date.now();
+  // ts はサーバー時刻で書く（MAIN / HOST のクライアント時計のズレに関係なく HOST 側で古さを判定できるように）
+  set(ref(db, 'camera_quality'), Object.assign({}, record, { ts: { '.sv': 'timestamp' } }));
 }, 5000);
 
-// PeerJS の call は peerConnection が後から生えることがあるので、複数のタイミングで拾う（CAM 側の hookCall と同じ考え方）
+// PeerJS の call は peerConnection が後から生えることがあるので、複数のタイミングで拾う（CAM 側の hookCall と同じ考え方）。
+// 状態監視自体は watchConnectionState（webrtc-stats.js）に任せる。単純な { once: true } は使わない
+// （connecting → connected の間に他の状態を経由することがあり、1 回目で外れると connected を一生観測できなくなる。#94 の回帰）。
 function hookMainCall(call) {
-  let started = false;
+  let watching = false;
   const tryStart = () => {
-    if (started) return;
+    if (watching) return;
     const pc = call.peerConnection;
     if (!pc) return;
-    started = true;
-    if (pc.connectionState === 'connected') watchMainQuality(pc);
-    else pc.addEventListener('connectionstatechange', () => { if (pc.connectionState === 'connected') watchMainQuality(pc); }, { once: true });
+    watching = true;
+    watchConnectionState(pc, {
+      onConnected: () => watchMainQuality(pc),
+      onDisconnected: () => clearQuality(), // 配信が切れたら HOST に古い値を残さない
+    });
   };
   tryStart();
   call.on('stream', tryStart);
@@ -493,8 +515,7 @@ function connectCamera(roomId) {
 function disconnectCamera() {
   if (cameraPeer) { try { cameraPeer.destroy(); } catch(e) {} }
   cameraPeer = null; cameraConnectedRoomId = null;
-  resetQuality();
-  remove(ref(db, 'camera_quality'));
+  clearQuality();
 }
 
 function showCameraVideo(show) {
@@ -811,11 +832,21 @@ function updateUI() {
 // camera_room監視（ソースが WebRTC のときだけ接続する）
 onValue(ref(db, 'camera_room'), (snapshot) => {
   const roomId = snapshot.val();
+  const hadRoom = !!lastCameraRoom;
   lastCameraRoom = roomId || null;
   if (roomId && cameraSource === 'webrtc') {
     settingsStatus('WebRTC: CAM に接続中');
     connectCamera(roomId);
+  } else if (!roomId && hadRoom && cameraSource === 'webrtc') {
+    // CAM が配信を止めた（camera_room が消えた）。HOST に古い配信品質を残さない
+    clearQuality();
   }
+});
+
+// MAIN 自身のリロード・クラッシュに備えて、DB 接続が（再）確立するたびに
+// 「切れたら camera_quality を消す」を登録し直す（onDisconnect は再接続ごとに再登録が必要）
+onValue(ref(db, '.info/connected'), (snap) => {
+  if (snap.val() === true) registerQualityDisconnectCleanup();
 });
 
 onValue(ref(db, 'scores'), (snapshot) => {

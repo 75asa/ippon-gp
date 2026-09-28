@@ -2,8 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  readRtpStats, bitrateKbps, shortCodec, watchQuality, readCandidatePairStats,
-  formatQuality, formatQualityRecord, toQualityRecord, qualityRecordEquals,
+  readRtpStats, bitrateKbps, shortCodec, watchQuality, watchConnectionState, readCandidatePairStats,
+  formatQuality, formatQualityRecord, toQualityRecord, qualityRecordEquals, isQualityStale,
 } from '../../web/src/shared/webrtc-stats.js';
 
 // getStats() が返す RTCStatsReport 相当（Map でよい）を組み立てる。
@@ -320,4 +320,106 @@ test('watchQuality: 再ネゴシエーション等で bytes がリセット（�
   assert.equal(got[1].kbps, 4200);
   assert.equal(got[2].kbps, null); // リセット直後は差分が負になるので null（誤ったスパイク値を出さない）
   assert.equal(got[2].width, 1280);
+});
+
+// watchConnectionState 用の偽 RTCPeerConnection。addEventListener/removeEventListener と
+// connectionState だけ持つ最小限のもの。_setState() で状態変化イベントを起こす
+function fakeConnPc(initialState = 'new') {
+  let listeners = [];
+  return {
+    connectionState: initialState,
+    get listenerCount() { return listeners.length; },
+    addEventListener(type, cb) { if (type === 'connectionstatechange') listeners.push(cb); },
+    removeEventListener(type, cb) { if (type === 'connectionstatechange') listeners = listeners.filter((l) => l !== cb); },
+    _setState(state) { this.connectionState = state; listeners.slice().forEach((cb) => cb()); },
+  };
+}
+
+test('watchConnectionState: connecting を経由して connected になっても onConnected が呼ばれる（#94 の回帰: { once: true } だと呼ばれない）', () => {
+  const pc = fakeConnPc('new');
+  const connected = [];
+  const disconnected = [];
+  watchConnectionState(pc, { onConnected: () => connected.push(1), onDisconnected: () => disconnected.push(1) });
+  pc._setState('connecting'); // { once: true } のバグでは、ここで listener が外れて connected を一生観測できない
+  assert.equal(connected.length, 0, 'connecting ではまだ呼ばれない');
+  pc._setState('connected');
+  assert.equal(connected.length, 1, 'connecting の後の connected で呼ばれる');
+  assert.equal(disconnected.length, 0);
+});
+
+test('watchConnectionState: 登録時点で既に connected なら即座に呼ぶ', () => {
+  const pc = fakeConnPc('connected');
+  let called = 0;
+  watchConnectionState(pc, { onConnected: () => called++ });
+  assert.equal(called, 1);
+});
+
+test('watchConnectionState: onConnected は 1 回だけ。再度 connected になっても増えない', () => {
+  const pc = fakeConnPc('new');
+  let called = 0;
+  watchConnectionState(pc, { onConnected: () => called++ });
+  pc._setState('connecting');
+  pc._setState('connected');
+  pc._setState('disconnected');
+  pc._setState('connected');
+  assert.equal(called, 1);
+});
+
+test('watchConnectionState: disconnected / failed / closed で onDisconnected が呼ばれる（何度でも）', () => {
+  const pc = fakeConnPc('new');
+  const disconnected = [];
+  watchConnectionState(pc, { onDisconnected: () => disconnected.push(pc.connectionState) });
+  pc._setState('connecting');
+  pc._setState('failed');
+  pc._setState('connecting');
+  pc._setState('closed');
+  assert.deepEqual(disconnected, ['failed', 'closed']);
+});
+
+test('watchConnectionState: 登録時点で既に切断済みなら即座に onDisconnected を呼ぶ', () => {
+  const pc = fakeConnPc('failed');
+  let called = 0;
+  watchConnectionState(pc, { onDisconnected: () => called++ });
+  assert.equal(called, 1);
+});
+
+test('watchConnectionState: 戻り値で止めると listener が外れ、以後どちらも呼ばれない', () => {
+  const pc = fakeConnPc('new');
+  let connected = 0;
+  let disconnected = 0;
+  const stop = watchConnectionState(pc, { onConnected: () => connected++, onDisconnected: () => disconnected++ });
+  assert.equal(pc.listenerCount, 1);
+  stop();
+  assert.equal(pc.listenerCount, 0);
+  pc._setState('connected');
+  pc._setState('failed');
+  assert.equal(connected, 0);
+  assert.equal(disconnected, 0);
+});
+
+test('watchConnectionState: コールバック省略でも例外にならない', () => {
+  const pc = fakeConnPc('new');
+  assert.doesNotThrow(() => {
+    watchConnectionState(pc, {});
+    pc._setState('connected');
+    pc._setState('failed');
+  });
+});
+
+test('isQualityStale: 15 秒以内なら新しい、超えたら古い', () => {
+  assert.equal(isQualityStale(1000, 1000), false);
+  assert.equal(isQualityStale(1000, 1000 + 15000), false);
+  assert.equal(isQualityStale(1000, 1000 + 15001), true);
+});
+
+test('isQualityStale: ts / serverNow が数値でなければ古い扱い（未接続と同じ表示にする）', () => {
+  assert.equal(isQualityStale(null, 1000), true);
+  assert.equal(isQualityStale(undefined, 1000), true);
+  assert.equal(isQualityStale(1000, null), true);
+  assert.equal(isQualityStale('1000', 2000), true);
+});
+
+test('isQualityStale: staleMs を変えられる', () => {
+  assert.equal(isQualityStale(1000, 6001, 5000), true);
+  assert.equal(isQualityStale(1000, 6000, 5000), false);
 });
