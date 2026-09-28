@@ -384,7 +384,7 @@ body { background: #000; display: flex; align-items: center; justify-content: ce
 <script type="module">
 import { initializeApp, getDatabase, ref, onValue, onDisconnect, remove, set, get } from "../src/shared/firebase.js";
 import { CODEC_DEFAULTS, preferCodec, setBitrateHints } from "../src/shared/sdp.js";
-import { watchQuality, watchConnectionState, formatQuality, toQualityRecord, qualityRecordEquals } from "../src/shared/webrtc-stats.js";
+import { watchQuality, watchConnectionState, formatQuality, toQualityRecord, qualityRecordEquals, QUALITY_PUBLISH_TICK_MS, QUALITY_HEARTBEAT_MS } from "../src/shared/webrtc-stats.js";
 import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue, voteStep } from "../src/shared/ippon.js";
 import { PLAYERS_PATH, PLAYER_COUNT, playerAt, scoreIndex, playersFromValue, escapeHtml } from "../src/shared/players.js";
 
@@ -447,22 +447,30 @@ function registerQualityDisconnectCleanup() {
 }
 
 // 変化したとき、または前回の書き込みから一定時間（heartbeat）が経ったときだけ HOST 用に書く。
-// heartbeat が無いと「値が変わらない = 何も書かない」ため、HOST 側で ts の古さから切断を判定できない
+// heartbeat が無いと「値が変わらない = 何も書かない」ため、HOST 側で ts の古さから切断を判定できない。
+// 間隔（QUALITY_PUBLISH_TICK_MS）と heartbeat の閾値（QUALITY_HEARTBEAT_MS）、
+// HOST 側の古さ判定のしきい値（QUALITY_STALE_MS）は webrtc-stats.js で一括管理している
 setInterval(() => {
   const record = toQualityRecord(mergedQuality(), Date.now());
   if (!record) return;
   const changed = !lastPublishedQuality || !qualityRecordEquals(lastPublishedQuality, record);
-  const heartbeatDue = Date.now() - lastPublishedAt >= 10000;
+  const heartbeatDue = Date.now() - lastPublishedAt >= QUALITY_HEARTBEAT_MS;
   if (!changed && !heartbeatDue) return;
   lastPublishedQuality = record;
   lastPublishedAt = Date.now();
   // ts はサーバー時刻で書く（MAIN / HOST のクライアント時計のズレに関係なく HOST 側で古さを判定できるように）
   set(ref(db, 'camera_quality'), Object.assign({}, record, { ts: { '.sv': 'timestamp' } }));
-}, 5000);
+}, QUALITY_PUBLISH_TICK_MS);
 
 // PeerJS の call は peerConnection が後から生えることがあるので、複数のタイミングで拾う（CAM 側の hookCall と同じ考え方）。
 // 状態監視自体は watchConnectionState（webrtc-stats.js）に任せる。単純な { once: true } は使わない
 // （connecting → connected の間に他の状態を経由することがあり、1 回目で外れると connected を一生観測できなくなる。#94 の回帰）。
+//
+// 'disconnected' は ICE が自動的に 'connected' に戻ることが多い一時的な瞬断なので、ここでは
+// この pc の品質監視だけ止め（stopMainQualityWatchers）、HOST 側の表示（RTDB の値・camLimit 等）は
+// 残す。復旧すれば watchConnectionState が再度 onConnected を呼び、watchMainQuality が新しく始まる
+// （#94 のフォローアップ: 瞬断で HOST がずっと「未接続」のまま戻らなくなる回帰の修正）。
+// 'failed' / 'closed' は復旧しないので、そこで初めて HOST の値ごと消す
 function hookMainCall(call) {
   let watching = false;
   const tryStart = () => {
@@ -472,7 +480,10 @@ function hookMainCall(call) {
     watching = true;
     watchConnectionState(pc, {
       onConnected: () => watchMainQuality(pc),
-      onDisconnected: () => clearQuality(), // 配信が切れたら HOST に古い値を残さない
+      onDisconnected: (state) => {
+        if (state === 'failed' || state === 'closed') clearQuality();
+        else stopMainQualityWatchers(); // 'disconnected'
+      },
     });
   };
   tryStart();

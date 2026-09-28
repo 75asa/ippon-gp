@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   readRtpStats, bitrateKbps, shortCodec, watchQuality, watchConnectionState, readCandidatePairStats,
   formatQuality, formatQualityRecord, toQualityRecord, qualityRecordEquals, isQualityStale,
+  QUALITY_PUBLISH_TICK_MS, QUALITY_HEARTBEAT_MS, QUALITY_STALE_MS,
 } from '../../web/src/shared/webrtc-stats.js';
 
 // getStats() が返す RTCStatsReport 相当（Map でよい）を組み立てる。
@@ -100,6 +101,44 @@ test('readCandidatePairStats: pair が無ければ null', () => {
 test('readCandidatePairStats: relay 経由も種別としてそのまま返す（TURN 無し構成では異常のはず）', () => {
   const r = report({ type: 'outbound-rtp', kind: 'video', pair: { local: 'relay', remote: 'srflx' } });
   assert.deepEqual(readCandidatePairStats(r), { local: 'relay', remote: 'srflx' });
+});
+
+test('readCandidatePairStats: nominated+succeeded な pair が複数あっても transport.selectedCandidatePairId を優先する', () => {
+  // ネットワーク切替直後など、旧 pair がまだ succeeded のまま新 pair も succeeded になる瞬間がある。
+  // report の列挙順（後勝ち）で拾うと誤ることがあるので、transport が指す方を正とする
+  const r = new Map();
+  r.set('o1', { type: 'outbound-rtp', kind: 'video', codecId: 'c1' });
+  r.set('c1', { type: 'codec', mimeType: 'video/H264' });
+  r.set('pairOld', { type: 'candidate-pair', nominated: true, selected: false, state: 'succeeded', localCandidateId: 'lOld', remoteCandidateId: 'rOld' });
+  r.set('lOld', { type: 'local-candidate', candidateType: 'host' });
+  r.set('rOld', { type: 'remote-candidate', candidateType: 'host' });
+  // 列挙順で後にある pairNew が「最後に見つかった nominated+succeeded」になるが、
+  // transport が古い pairOld をまだ指しているケース（切替がまだ完了していない）
+  r.set('pairNew', { type: 'candidate-pair', nominated: true, selected: true, state: 'succeeded', localCandidateId: 'lNew', remoteCandidateId: 'rNew' });
+  r.set('lNew', { type: 'local-candidate', candidateType: 'srflx' });
+  r.set('rNew', { type: 'remote-candidate', candidateType: 'srflx' });
+  r.set('t1', { type: 'transport', selectedCandidatePairId: 'pairOld' });
+  assert.deepEqual(readCandidatePairStats(r), { local: 'host', remote: 'host' }, 'transport が指す pairOld を返す（列挙順で後にある pairNew ではない）');
+});
+
+test('readCandidatePairStats: transport が無ければ nominated+succeeded（列挙順で見つかったもの）にフォールバックする', () => {
+  const r = new Map();
+  r.set('pairA', { type: 'candidate-pair', nominated: true, selected: false, state: 'succeeded', localCandidateId: 'lA', remoteCandidateId: 'rA' });
+  r.set('lA', { type: 'local-candidate', candidateType: 'host' });
+  r.set('rA', { type: 'remote-candidate', candidateType: 'host' });
+  r.set('pairB', { type: 'candidate-pair', nominated: true, selected: true, state: 'succeeded', localCandidateId: 'lB', remoteCandidateId: 'rB' });
+  r.set('lB', { type: 'local-candidate', candidateType: 'srflx' });
+  r.set('rB', { type: 'remote-candidate', candidateType: 'srflx' });
+  assert.deepEqual(readCandidatePairStats(r), { local: 'srflx', remote: 'srflx' });
+});
+
+test('readCandidatePairStats: transport はあるが selectedCandidatePairId が指す pair が report に無ければ従来のフォールバックを使う', () => {
+  const r = new Map();
+  r.set('t1', { type: 'transport', selectedCandidatePairId: 'missing' });
+  r.set('pairA', { type: 'candidate-pair', nominated: true, selected: true, state: 'succeeded', localCandidateId: 'lA', remoteCandidateId: 'rA' });
+  r.set('lA', { type: 'local-candidate', candidateType: 'host' });
+  r.set('rA', { type: 'remote-candidate', candidateType: 'host' });
+  assert.deepEqual(readCandidatePairStats(r), { local: 'host', remote: 'host' });
 });
 
 test('shortCodec: video/ プレフィックスを外して大文字化', () => {
@@ -354,26 +393,52 @@ test('watchConnectionState: 登録時点で既に connected なら即座に呼�
   assert.equal(called, 1);
 });
 
-test('watchConnectionState: onConnected は 1 回だけ。再度 connected になっても増えない', () => {
+test('watchConnectionState: 同じ connected 区間の中では onConnected は 1 回だけ', () => {
   const pc = fakeConnPc('new');
   let called = 0;
   watchConnectionState(pc, { onConnected: () => called++ });
   pc._setState('connecting');
   pc._setState('connected');
-  pc._setState('disconnected');
-  pc._setState('connected');
+  pc._setState('connected'); // 実際のブラウザでは connectionState が変わらなければイベントは発火しないはずだが、念のため
   assert.equal(called, 1);
 });
 
-test('watchConnectionState: disconnected / failed / closed で onDisconnected が呼ばれる（何度でも）', () => {
+test('watchConnectionState: connected → disconnected → connected で onConnected が再度呼ばれ、監視が再開する（#94 フォローアップの回帰）', () => {
+  // 瞬断（'disconnected'）は ICE が自動的に 'connected' へ戻ることが多い。
+  // 以前は onConnected が「一生に 1 回」だったため、瞬断から復旧しても品質監視が二度と始まらず、
+  // HOST がイベント中ずっと「未接続」のままになる回帰があった
+  const pc = fakeConnPc('new');
+  let called = 0;
+  watchConnectionState(pc, { onConnected: () => called++ });
+  pc._setState('connecting');
+  pc._setState('connected');
+  assert.equal(called, 1);
+  pc._setState('disconnected'); // 瞬断
+  pc._setState('connected'); // ICE が自動的に復旧
+  assert.equal(called, 2, '瞬断から復旧したら再度呼ばれる');
+});
+
+test('watchConnectionState: failed から connected に戻っても onConnected が再度呼ばれる', () => {
+  const pc = fakeConnPc('new');
+  let called = 0;
+  watchConnectionState(pc, { onConnected: () => called++ });
+  pc._setState('connected');
+  pc._setState('failed');
+  pc._setState('connected'); // ICE 再起動等で復旧するケース
+  assert.equal(called, 2);
+});
+
+test('watchConnectionState: disconnected / failed / closed で onDisconnected が state 付きで呼ばれる（何度でも）', () => {
   const pc = fakeConnPc('new');
   const disconnected = [];
-  watchConnectionState(pc, { onDisconnected: () => disconnected.push(pc.connectionState) });
+  watchConnectionState(pc, { onDisconnected: (state) => disconnected.push(state) });
   pc._setState('connecting');
+  pc._setState('disconnected');
+  pc._setState('connected'); // 復旧
   pc._setState('failed');
   pc._setState('connecting');
   pc._setState('closed');
-  assert.deepEqual(disconnected, ['failed', 'closed']);
+  assert.deepEqual(disconnected, ['disconnected', 'failed', 'closed']);
 });
 
 test('watchConnectionState: 登録時点で既に切断済みなら即座に onDisconnected を呼ぶ', () => {
@@ -406,10 +471,10 @@ test('watchConnectionState: コールバック省略でも例外にならない'
   });
 });
 
-test('isQualityStale: 15 秒以内なら新しい、超えたら古い', () => {
+test('isQualityStale: QUALITY_STALE_MS 以内なら新しい、超えたら古い（既定値を使う）', () => {
   assert.equal(isQualityStale(1000, 1000), false);
-  assert.equal(isQualityStale(1000, 1000 + 15000), false);
-  assert.equal(isQualityStale(1000, 1000 + 15001), true);
+  assert.equal(isQualityStale(1000, 1000 + QUALITY_STALE_MS), false);
+  assert.equal(isQualityStale(1000, 1000 + QUALITY_STALE_MS + 1), true);
 });
 
 test('isQualityStale: ts / serverNow が数値でなければ古い扱い（未接続と同じ表示にする）', () => {
@@ -422,4 +487,22 @@ test('isQualityStale: ts / serverNow が数値でなければ古い扱い（未�
 test('isQualityStale: staleMs を変えられる', () => {
   assert.equal(isQualityStale(1000, 6001, 5000), true);
   assert.equal(isQualityStale(1000, 6000, 5000), false);
+});
+
+test('QUALITY_STALE_MS は、実際の最悪書き込み間隔（heartbeat + tick の判定間隔）より十分大きい（#94 フォローアップ）', () => {
+  // MAIN は QUALITY_PUBLISH_TICK_MS 間隔でしか「heartbeat 経過したか」を見ないので、
+  // 実際に書き込まれる間隔は最悪 QUALITY_HEARTBEAT_MS + QUALITY_PUBLISH_TICK_MS 近くになりうる。
+  // QUALITY_STALE_MS がそれとほぼ同じだと、健全に配信中でも HOST が一瞬「更新なし」にちらつく
+  // （flicker）ので、最低でもこの余白（ここでは 5 秒）を要求する
+  const worstCasePublishGap = QUALITY_HEARTBEAT_MS + QUALITY_PUBLISH_TICK_MS;
+  const margin = QUALITY_STALE_MS - worstCasePublishGap;
+  assert.ok(margin >= 5000, `margin が小さすぎる（${margin}ms）。QUALITY_STALE_MS を上げるか QUALITY_HEARTBEAT_MS を下げること`);
+});
+
+test('QUALITY_STALE_MS の余白の範囲で isQualityStale が「健全」と「古い」を正しく判定する', () => {
+  const worstCasePublishGap = QUALITY_HEARTBEAT_MS + QUALITY_PUBLISH_TICK_MS;
+  // 最悪ケースの書き込み間隔ちょうどでは、まだ健全（stale ではない）と判定できること
+  assert.equal(isQualityStale(0, worstCasePublishGap), false);
+  // QUALITY_STALE_MS を過ぎたら古いと判定できること
+  assert.equal(isQualityStale(0, QUALITY_STALE_MS + 1), true);
 });

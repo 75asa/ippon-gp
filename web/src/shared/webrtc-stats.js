@@ -20,9 +20,18 @@ function codecMime(report, codecId) {
   return c ? c.mimeType : null;
 }
 
-// 選ばれている candidate-pair を探す。ブラウザ間の差を吸収するため nominated+succeeded を優先し、
-// 無ければ selected（Chrome の古い実装。将来的に無くなる想定の互換フラグ）にフォールバックする。
+// 選ばれている candidate-pair を探す。まず transport stat の selectedCandidatePairId を見る
+// （ちょうど 1 本だけを指す、最も信頼できる値）。無ければ nominated+succeeded、それも無ければ
+// selected（Chrome の古い実装。将来的に無くなる想定の互換フラグ）の順にフォールバックする。
+// nominated+succeeded は、ネットワーク切替直後など複数の pair が同時に条件を満たすことがあり、
+// その場合 report の列挙順（＝どれが最後に見つかったか）に左右されて誤った pair を拾う恐れがある。
 function findSelectedPair(report) {
+  let transportPairId = null;
+  report.forEach((s) => { if (s.type === 'transport' && s.selectedCandidatePairId) transportPairId = s.selectedCandidatePairId; });
+  if (transportPairId && report.get) {
+    const viaTransport = report.get(transportPairId);
+    if (viaTransport) return viaTransport;
+  }
   let pair = null;
   report.forEach((s) => { if (s.type === 'candidate-pair' && s.nominated && s.state === 'succeeded') pair = s; });
   if (!pair) report.forEach((s) => { if (s.type === 'candidate-pair' && s.selected) pair = s; });
@@ -91,12 +100,16 @@ const DEAD_CONNECTION_STATES = new Set(['disconnected', 'failed', 'closed']);
 
 /**
  * RTCPeerConnection の connectionState の変化を見て、
- * 初めて 'connected' になったら onConnected() を、'disconnected' / 'failed' / 'closed' になったら
- * onDisconnected() を呼ぶ。pc がすでに 'connected' / 切断済みなら登録した時点で即座に呼ぶ。
+ * 'connected' になるたびに onConnected() を、'disconnected' / 'failed' / 'closed' になったら
+ * onDisconnected(state) を呼ぶ（state で呼び分けられるように渡す。'disconnected' は ICE が自動的に
+ * 'connected' へ戻ることが多い一時的な瞬断、'failed' / 'closed' は復旧しない切断）。
+ * pc がすでに 'connected' / 切断済みなら登録した時点で即座に呼ぶ。
  *
  * `{ once: true }` は使わない: 最初に発火する connectionstatechange は 'connecting' 等が多く、
  * once だとそこで listener が外れて 'connected' を一生観測できなくなる（#94 で実際に起きた回帰）。
- * onConnected は 1 回だけ呼ぶが、その後も onDisconnected の監視は続ける。
+ * onConnected は「1 回の connected 区間につき 1 回」だけ呼ぶ（同じ 'connected' が連続しても増えない）。
+ * disconnected/failed/closed のいずれかを経由すると連続とはみなさないので、そこから 'connected' に
+ * 戻れば onConnected は再び呼ばれる（#94 のフォローアップ: 瞬断後に監視が再開しない回帰の修正）。
  * 戻り値の関数で監視を止められる（以後どちらのコールバックも呼ばれない）。
  */
 export function watchConnectionState(pc, { onConnected, onDisconnected } = {}) {
@@ -105,12 +118,16 @@ export function watchConnectionState(pc, { onConnected, onDisconnected } = {}) {
   const handleChange = () => {
     if (stopped) return;
     const state = pc.connectionState;
-    if (!connectedFired && state === 'connected') {
-      connectedFired = true;
-      if (onConnected) onConnected();
+    if (state === 'connected') {
+      if (!connectedFired) {
+        connectedFired = true;
+        if (onConnected) onConnected();
+      }
     } else if (DEAD_CONNECTION_STATES.has(state)) {
-      if (onDisconnected) onDisconnected();
+      connectedFired = false; // 復旧して 'connected' に戻ったら、再度 onConnected を呼べるようにする
+      if (onDisconnected) onDisconnected(state);
     }
+    // 'connecting' 等の中間状態では何もしない
   };
   pc.addEventListener('connectionstatechange', handleChange);
   handleChange(); // 登録時点で既に connected / 切断済みなら、イベントを待たずに即反映する
@@ -233,12 +250,22 @@ export function qualityRecordEquals(a, b, { fpsTolerance = 2, kbpsTolerance = 20
     && Math.abs((a.kbps || 0) - (b.kbps || 0)) <= kbpsTolerance;
 }
 
+// MAIN の camera_quality 書き込みと、HOST の「古さ」判定をつなぐ定数（#94 フォローアップ）。
+// MAIN は QUALITY_PUBLISH_TICK_MS 間隔の setInterval で「前回の書き込みから QUALITY_HEARTBEAT_MS
+// 経ったか」を見るので、実際に書き込まれる間隔は最悪 QUALITY_HEARTBEAT_MS + QUALITY_PUBLISH_TICK_MS
+// 近くになりうる（heartbeat の閾値を跨いだ直後に tick が来た場合）。QUALITY_STALE_MS をそれと同じか
+// 近い値にすると、健全なのに HOST が「更新なし」にちらつく（flicker）ので、十分な余白を持たせること。
+// この関係は下のテスト（webrtc-stats.test.mjs）で健全性チェックしている。
+export const QUALITY_PUBLISH_TICK_MS = 5000; // MAIN: camera_quality を書くかどうかの判定間隔
+export const QUALITY_HEARTBEAT_MS = 8000; // MAIN: 変化が無くても、前回の書き込みからこの時間が経ったら書き直す
+export const QUALITY_STALE_MS = 25000; // HOST: サーバー時刻基準でこれより古ければ「更新なし」扱い
+
 /**
  * camera_quality の ts が古すぎる（配信が切れているのに値だけ残っている）かどうか。
  * ts / serverNow はどちらも「サーバー時刻」基準の ms（HOST 側は Date.now() + .info/serverTimeOffset で見積もる）。
- * ts が数値でなければ古い扱い（未接続と同じ表示にする）。
+ * ts が数値でなければ古い扱い（未接続と同じ表示にする）。既定のしきい値は QUALITY_STALE_MS。
  */
-export function isQualityStale(ts, serverNow, staleMs = 15000) {
+export function isQualityStale(ts, serverNow, staleMs = QUALITY_STALE_MS) {
   if (typeof ts !== 'number' || typeof serverNow !== 'number') return true;
   return serverNow - ts > staleMs;
 }
