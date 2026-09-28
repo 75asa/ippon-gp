@@ -111,3 +111,26 @@ export async function sendingCodec(pc) {
     return null;
   }
 }
+
+/**
+ * 送信コーデックが分かるまで getStats を定期的に見る。接続直後は outbound-rtp がまだ無いことが多いため。
+ * 見つかったら onCodec(mimeType) を呼んで止まる。timeoutMs を過ぎても止まる。戻り値の関数で途中で止められる。
+ */
+export function watchSendingCodec(pc, onCodec, { intervalMs = 1500, timeoutMs = 30000 } = {}) {
+  let stopped = false;
+  let timer = null;
+  const deadline = Date.now() + timeoutMs;
+  const stop = () => { stopped = true; clearTimeout(timer); };
+  const tick = async () => {
+    if (stopped) return;
+    if (pc.connectionState === 'closed') return stop();
+    const codec = await sendingCodec(pc);
+    if (stopped) return;
+    if (pc.connectionState === 'closed') return stop(); // 取得中に切断されたら通知しない
+    if (codec) { stop(); onCodec(codec); return; }
+    if (Date.now() >= deadline) return stop();
+    timer = setTimeout(tick, intervalMs);
+  };
+  tick();
+  return stop;
+}

@@ -1,7 +1,7 @@
 // web/src/shared/sdp.js の単体テスト。node --test tests/unit/ で実行（依存なし）
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { preferCodec, setBitrateHints } from '../../web/src/shared/sdp.js';
+import { preferCodec, setBitrateHints, watchSendingCodec } from '../../web/src/shared/sdp.js';
 
 // Chrome の offer（抜粋）。VP8 が先頭、H.264 は packetization-mode=0/1 の両方がある
 const CHROME = [
@@ -62,6 +62,52 @@ test('二重に適用しても重複しない / 開始ビットレート未指�
   const once = setBitrateHints(CHROME, { startKbps: 3000 });
   assert.equal(setBitrateHints(once, { startKbps: 3000 }), once);
   assert.equal(setBitrateHints(CHROME, {}), CHROME);
+});
+
+// getStats を差し替えた偽の RTCPeerConnection。n 回目から outbound-rtp が出る
+function fakePc(appearsAt) {
+  let calls = 0;
+  return {
+    connectionState: 'connected',
+    get calls() { return calls; },
+    async getStats() {
+      calls++;
+      const m = new Map();
+      if (calls >= appearsAt) {
+        m.set('o', { type: 'outbound-rtp', kind: 'video', codecId: 'c' });
+        m.set('c', { type: 'codec', mimeType: 'video/H264' });
+      }
+      return m;
+    },
+  };
+}
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+test('watchSendingCodec: 統計が出るまで待ち、見つけたら 1 回だけ通知して止まる', async () => {
+  const pc = fakePc(3);
+  const got = [];
+  watchSendingCodec(pc, (c) => got.push(c), { intervalMs: 5, timeoutMs: 1000 });
+  await wait(80);
+  assert.deepEqual(got, ['video/H264']);
+  assert.equal(pc.calls, 3);
+});
+
+test('watchSendingCodec: 止める関数・タイムアウト・closed で止まる', async () => {
+  const a = fakePc(Infinity);
+  const stop = watchSendingCodec(a, () => assert.fail(), { intervalMs: 5, timeoutMs: 1000 });
+  await wait(20); stop();
+  const n = a.calls; await wait(30);
+  assert.equal(a.calls, n, 'stop 後は getStats を呼ばない');
+
+  const b = fakePc(Infinity);
+  watchSendingCodec(b, () => assert.fail(), { intervalMs: 5, timeoutMs: 20 });
+  await wait(60); const m = b.calls; await wait(30);
+  assert.equal(b.calls, m, 'タイムアウト後は止まる');
+
+  const c = fakePc(Infinity); c.connectionState = 'closed';
+  watchSendingCodec(c, () => assert.fail(), { intervalMs: 5 });
+  await wait(20);
+  assert.equal(c.calls, 0, 'closed なら getStats を呼ばない');
 });
 
 test('LF 改行の SDP でも動く', () => {
