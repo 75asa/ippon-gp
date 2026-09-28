@@ -37,11 +37,12 @@
          ノードごとの削除（設定画面が消えた席を片付ける）と、各席の削除（戻る・onDisconnect・長押しの引き継ぎ）は誰でもできる */
       ".write": "!newData.exists()",
       "$seat": {
-        /* 空席を取る / 自分の席を取り直す / 外す。他の端末の席の上書きは不可 */
-        ".write": "!newData.exists() || !data.exists() || data.child('device').val() === newData.child('device').val()",
+        /* 空席を取る / 自分の席を取り直す / 外す。他の端末の席の上書きは、from に今の持ち主を入れた引き継ぎ（長押し）だけ */
+        ".write": "!newData.exists() || !data.exists() || data.child('device').val() === newData.child('device').val() || newData.child('from').val() === data.child('device').val()",
         ".validate": "$seat.matches(/^([1-9]|10)$/) && newData.hasChildren(['device', 'at']) && (!root.child('settings/judges').exists() || root.child('settings/judges').hasChild($seat))",
         "device": { ".validate": "newData.isString() && newData.val().matches(/^d[a-z0-9]{8,32}$/)" },
         "at": { ".validate": "newData.isNumber() && newData.val() <= now" },
+        "from": { ".validate": "newData.isString() && newData.val().matches(/^d[a-z0-9]{8,32}$/)" },
         "$other": { ".validate": false }
       }
     },

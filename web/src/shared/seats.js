@@ -32,9 +32,12 @@ export function seatState(claims, seat, device) {
   return c.device === device ? 'mine' : 'taken';
 }
 
-// トランザクションの更新関数: 空いているか自分の席なら取り、他の端末の席なら中止（undefined）
-export function claimUpdate(current, device, at) {
-  if (current && current.device && current.device !== device) return undefined;
+// トランザクションの更新関数: 空いているか自分の席なら取り、他の端末の席なら中止（undefined）。
+// takeover = true なら他の端末の席を 1 回の書き込みで引き継ぐ（from = 前の持ち主。ルールはこれが一致するときだけ上書きを許す）
+export function claimUpdate(current, device, at, takeover = false) {
+  if (current && current.device && current.device !== device) {
+    return takeover ? { device, at, from: current.device } : undefined;
+  }
   return { device, at };
 }
 

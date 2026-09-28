@@ -66,7 +66,7 @@ body { background: #000; font-family: sans-serif; display: flex; flex-direction:
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
-import { getDatabase, ref, set, onValue, remove, runTransaction, onDisconnect, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
+import { getDatabase, ref, set, onValue, runTransaction, onDisconnect, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
 import { JUDGES_PATH, judgesFromValue } from "../src/shared/judges.js";
 import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue } from "../src/shared/ippon.js";
 import { SEATS_PATH, SEAT_KEY, loadDeviceId, seatState, claimUpdate, releaseUpdate } from "../src/shared/seats.js";
@@ -111,12 +111,11 @@ function setSeatMsg(text) {
   document.getElementById('seat-msg').textContent = text;
 }
 
-// 席を取る。force = 使用中の席を引き継ぐ（前の端末の席を外してから取る）
+// 席を取る。force = 使用中の席を引き継ぐ（前の持ち主を from に入れて 1 回で上書きする。いったん空けないので前の端末と取り合いにならない）
 async function claimSeat(seat, { force = false } = {}) {
   const seatRef = ref(db, `${SEATS_PATH}/${seat}`);
   try {
-    if (force) await remove(seatRef);
-    const res = await runTransaction(seatRef, (cur) => claimUpdate(cur, DEVICE, serverTimestamp()));
+    const res = await runTransaction(seatRef, (cur) => claimUpdate(cur, DEVICE, serverTimestamp(), force));
     if (!res.committed) {
       setSeatMsg(`${seatNames[seat] || seat} は別の端末で使われています。長押しで引き継げます`);
       return false;
@@ -304,10 +303,11 @@ onValue(ref(db, SEATS_PATH), (snapshot) => {
       selectedSeat = null;
       saveSeat(null);
       onDisconnect(ref(db, `${SEATS_PATH}/${seat}`)).cancel().catch(() => {});
-      setSeatMsg(`${seatNames[seat] || seat} は別の端末に引き継がれました`);
+      setSeatMsg(`この席（${seatNames[seat] || seat}）は別の端末に引き継がれました`);
       showView('select');
     } else if (state === 'free' && !reclaiming) {
-      // 通信断で onDisconnect が走った・誰かに外された等で席が空いた → 取り直す
+      // 本当に空いたとき（通信断で自分の onDisconnect が走った等）だけ取り直す。
+      // 引き継ぎは 1 回の上書きで席が空かないので、ここには来ない
       reclaiming = true;
       claimSeat(selectedSeat).finally(() => { reclaiming = false; });
     }
