@@ -375,7 +375,9 @@ let threshold = DEFAULT_THRESHOLD;
 onValue(ref(db, THRESHOLD_PATH), (snap) => { threshold = thresholdFromValue(snap.val()); });
 
 // お題数（設定画面で変更。無ければ 6）。問N・▶N ボタンは設定を超える番号を隠す（ルールも同じ上限で拒否する）
+let odaiCount = DEFAULT_ODAI_COUNT;
 function applyOdaiCount(count) {
+  odaiCount = count;
   for (let n = 1; n <= MAX_ODAI_COUNT; n++) {
     const show = n <= count;
     const btn = document.getElementById('odai-btn-' + n);
@@ -531,7 +533,8 @@ window.showScoreboard = () => {
 };
 
 window.showOdai = (n) => {
-  applyMode('odai', { n });
+  if (n > odaiCount) return; // 設定で隠したお題（ボタンは非表示だが念のため）
+  applyMode('odai', { n, max: odaiCount });
   prevVoteCount = 0;
 };
 window.reveal = () => {

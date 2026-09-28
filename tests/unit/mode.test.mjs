@@ -78,3 +78,10 @@ test('mode を書く全アクションの値は database.rules.json の enum に
   }
   assert.ok(MODES.includes(modeUpdates('odai', { n: 1 }).mode));
 });
+
+test('odai: お題数の設定（max）を超える番号は投げる。省略時の上限は 6', () => {
+  assert.equal(modeUpdates('odai', { n: 3, max: 3 }).odai, 3);
+  assert.throws(() => modeUpdates('odai', { n: 4, max: 3 }));
+  assert.equal(modeUpdates('odai', { n: 6 }).odai, 6);
+  assert.throws(() => modeUpdates('odai', { n: 7 }));
+});

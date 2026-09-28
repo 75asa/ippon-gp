@@ -10,11 +10,14 @@
 // 値が null のキーは update() の仕様どおり「削除」を意味する。
 //
 // mode の取りうる値は firebase/database.rules.json の enum と揃える。
+import { MAX_ODAI_COUNT } from './odai.js';
+
 export const MODES = ['taiki', 'odai', 'saiten', 'scoreboard', 'agenda'];
 
 export const MODE_ACTIONS = ['taiki', 'odai', 'saiten', 'scoreboard', 'resetVotes', 'agendaClear'];
 
-// n: お題番号（'odai' のときだけ必須、1〜6）
+// n: お題番号（'odai' のときだけ必須）。max: お題数の設定（settings/odaiCount、省略時は素材がある 6）。
+// ルールも同じ上限で odai を拒否するので、範囲外を書いて遷移全体（1 回の update）が失敗しないよう、ここで弾く
 export function modeUpdates(action, payload = {}) {
   switch (action) {
     case 'taiki':
@@ -57,8 +60,9 @@ export function modeUpdates(action, payload = {}) {
 
     case 'odai': {
       const n = payload.n;
-      if (!Number.isInteger(n) || n < 1 || n > 6) {
-        throw new Error('modeUpdates(odai): n must be an integer 1..6, got ' + n);
+      const max = payload.max ?? MAX_ODAI_COUNT;
+      if (!Number.isInteger(n) || n < 1 || n > max) {
+        throw new Error(`modeUpdates(odai): n must be an integer 1..${max}, got ${n}`);
       }
       return {
         agenda: null,
