@@ -206,6 +206,7 @@ import { CLIENTS_MAIN_PATH, mainStatusPhase } from '../src/shared/mainStatus.js'
 import { ODAI_COUNT_PATH, DEFAULT_ODAI_COUNT, MAX_ODAI_COUNT, odaiCountFromValue } from '../src/shared/odai.js';
 import { formatQualityRecord, isQualityStale } from '../src/shared/webrtc-stats.js';
 import { modeUpdates } from '../src/shared/mode.js';
+import { agendaClearAction } from '../src/shared/agenda.js';
 
 const STORAGE_BASE = window.IPPON_CONFIG.storageBase;
 
@@ -507,11 +508,12 @@ onValue(ref(db, 'mode'), (snap) => {
 // update() で1回のアトミック書き込みにする。以前は remove(agenda) → set(mode,...) を別々に送っていたため、
 // HOST自身の agenda リスナー（下の onValue(ref(db,'agenda'))）が「MAINでの動画終了」と誤認して
 // 途中の mode（previousMode）を書き戻し、新しい mode を巻き戻すことがあった。
-// applyMode() は「これから自分で agenda を消す」ことを事前にマークし（agendaIsSet が真のときだけ）、
-// 直後に agenda リスナーが呼ばれてもその1回は mode の巻き戻しをしないようにする。
+// applyMode() は markAgendaClear() で「これから自分で agenda を消す（差し替えは無い）」ことを
+// 事前にマークし（agendaIsSet が真のときだけ）、直後に agenda リスナーが呼ばれてもその1回は
+// mode の巻き戻しをしないようにする（詳細は web/src/shared/agenda.js）。
 function applyMode(action, payload) {
   const patch = modeUpdates(action, payload);
-  if (patch.agenda === null && agendaIsSet) manualStop = true;
+  if (patch.agenda === null && agendaIsSet) markAgendaClear(false);
   return update(ref(db), patch);
 }
 
@@ -785,63 +787,69 @@ window.playAgendaAudio = (key) => {
 };
 
 let currentAgendaKey = null;
-let manualStop = false;
-// 直前の agenda 値が真だったか。MAIN側の動画終了（自動）とHOST自身の遷移による削除を、
-// 「agenda が真 → 偽になった」という変化そのものでしか判定できないため追跡する（#22）。
-// これが無いと、ページ読み込み直後（agenda が最初から null）にも誤って mode を書き戻してしまう。
+// HOST自身が今回の agenda 削除を起こしたか（#22 のフォローアップ、PR #92 レビューでの回帰修正）。
+// null = HOST起因ではない（MAIN側の自動終了、または想定外の削除）。
+// { replacing: true }  = 別の agenda 項目に切替中。この直後に新しい値を書くので見た目は変えない
+// { replacing: false } = 差し替え無しの明示停止/離脱。見た目はリセットするが mode は書き戻さない
+// onValue(ref(db,'agenda')) が1回だけ消費する。判断ロジック本体は web/src/shared/agenda.js の
+// agendaClearAction() に切り出してあり、ここでは「今回の削除の理由」を記録するだけにする。
+let pendingAgendaClear = null;
+function markAgendaClear(replacing) {
+  pendingAgendaClear = { replacing };
+}
+// 直前の agenda 値が真だったか。「agenda が真 → 偽になった」という変化そのものでしか
+// 削除イベントを判定できないため追跡する。これが無いと、ページ読み込み直後
+// （agenda が最初から null）にも誤って mode を書き戻してしまう。
 let agendaIsSet = false;
 
 let previousMode = 'taiki';
+
+function resetAgendaBtnText() {
+  ['op_comment','op_movie'].forEach(k => {
+    const btn = document.getElementById('agenda-btn-' + k);
+    if (btn) btn.textContent = '▶ ' + (k === 'op_comment' ? 'OP COMMENT' : 'OP MOVIE');
+  });
+}
 
 window.showAgenda = (key) => {
   currentAgendaKey = key;
   set(ref(db, 'mode'), 'agenda');
   setTimeout(() => set(ref(db, 'agenda'), AGENDA_URLS[key]), 50);
-  ['op_comment','op_movie'].forEach(k => {
-    const btn = document.getElementById('agenda-btn-' + k);
-    if (btn) btn.textContent = '▶ ' + (k === 'op_comment' ? 'OP COMMENT' : 'OP MOVIE');
-  });
+  resetAgendaBtnText();
 };
 
 onValue(ref(db, 'agenda'), (snapshot) => {
   const val = snapshot.val();
   if (!val && agendaIsSet) {
-    // agenda が真 → 偽になった（このタブの起動時に最初から null だったのでは無い）。
-    // ボタン表示のリセットは、原因が何であれ常に行ってよい見た目だけの後片付け。
-    currentAgendaKey = null;
-    ['op_comment','op_movie'].forEach(k => {
-      const btn = document.getElementById('agenda-btn-' + k);
-      if (btn) btn.textContent = '▶ ' + (k === 'op_comment' ? 'OP COMMENT' : 'OP MOVIE');
+    // agenda が真 → 偽になった（このタブの起動時に最初から null だったのではない）
+    const action = agendaClearAction({
+      hostInitiated: !!pendingAgendaClear,
+      replacing: !!(pendingAgendaClear && pendingAgendaClear.replacing),
     });
-    if (!manualStop) {
-      // manualStop が立っていない = HOST自身の遷移（applyMode）でも
-      // toggleAgendaVideoの明示停止でもない → MAIN側の自動終了通知（動画終了など）。
-      // previousModeに戻す
-      set(ref(db, 'mode'), previousMode);
-    }
+    if (action.resetCurrentKey) currentAgendaKey = null;
+    if (action.resetButtons) resetAgendaBtnText();
+    if (action.restoreMode) set(ref(db, 'mode'), previousMode);
   }
-  manualStop = false;
+  pendingAgendaClear = null;
   agendaIsSet = !!val;
 });
 
 window.toggleAgendaVideo = (key) => {
   const btn = document.getElementById('agenda-btn-' + key);
   if (currentAgendaKey === key) {
-    // 停止
-    manualStop = true;
+    // 停止（差し替え無し）
+    markAgendaClear(false);
     remove(ref(db, 'agenda'));
     currentAgendaKey = null;
     if (btn) btn.textContent = '▶ ' + (key === 'op_comment' ? 'OP COMMENT' : 'OP MOVIE');
   } else {
-    // 再生
-    ['op_comment','op_movie'].forEach(k => {
-      const b = document.getElementById('agenda-btn-' + k);
-      if (b) b.textContent = '▶ ' + (k === 'op_comment' ? 'OP COMMENT' : 'OP MOVIE');
-    });
+    // 再生（別の動画への切替・画像からの切替を含む）。
+    // currentAgendaKey とボタン表示は既にここで新しい値へ更新済みなので、
+    // 直後に agenda リスナーが null を検知しても上書きしない（markAgendaClear(true)）
+    resetAgendaBtnText();
     currentAgendaKey = key;
-    manualStop = true;
+    markAgendaClear(true);
     remove(ref(db, 'agenda')).then(() => {
-      manualStop = false;
       set(ref(db, 'mode'), 'agenda');
       setTimeout(() => set(ref(db, 'agenda'), AGENDA_URLS[key]), 50);
     });

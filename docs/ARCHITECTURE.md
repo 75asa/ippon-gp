@@ -95,15 +95,26 @@ stateDiagram-v2
 | → 採点 | `hideOdai()` | `mode='saiten'`, `keep_audio=true`, `taiki/odai/agenda/answer_text/votes/revealed` 削除 | `keep_audio` は 2 秒後に別途削除（§3.2） |
 | → 結果 | `showScoreboard()` | `mode='scoreboard'`, `taiki/odai/agenda/answer_text/votes/revealed` 削除 | |
 | 投票リセット | `resetVotes()` | `votes` 削除, `revealed=false` | `mode` は変えない |
-| アジェンダ表示 | `showAgenda(key)` / `toggleAgendaVideo(key)` | `mode='agenda'`、50ms 後に `agenda=URL` | 画像・OP動画・ルール・QR・紹介・優勝画面など。URL 切替だけなら `mode` は変えない |
-| アジェンダ手動停止 | `toggleAgendaVideo(key)`（再生中に再度押す） | `agenda` 削除 | `mode` は `'agenda'` のまま（次の遷移で上書きされる） |
-| アジェンダ自動終了 | MAIN 側 `agendaVideo.onended` が `agenda` を削除 | （HOST は書かない。HOST の `agenda` リスナーが検知して `mode=previousMode` を書く） | OP動画などが最後まで再生されたときだけ発生 |
+| アジェンダ表示（画像） | `showAgenda(key)` | `mode='agenda'`、50ms 後に `agenda=URL` | ルール・QR・紹介・優勝画面など。`agenda` を消さずに直接新しい URL で上書きするので、動画→画像の切替でもリスナーの `!val` 分岐は発生しない |
+| アジェンダ切替（動画↔動画・画像→動画） | `toggleAgendaVideo(key)`（別の key を押す） | `agenda` 削除 → 50ms 後に新しい `agenda=URL` | `markAgendaClear(true)` で「差し替え中」を予約。`currentAgendaKey`／ボタン表示は呼び出し側が更新済みなのでリスナーは何もしない |
+| アジェンダ手動停止 | `toggleAgendaVideo(key)`（再生中に同じ key を再度押す） | `agenda` 削除 | `markAgendaClear(false)`。`mode` は `'agenda'` のまま（次の遷移で上書きされる） |
+| アジェンダ自動終了 | MAIN 側 `agendaVideo.onended` が `agenda` を削除 | （HOST は書かない。HOST の `agenda` リスナーが検知して `mode=previousMode` を書く） | OP動画などが最後まで再生されたときだけ発生。HOST は何も予約していないので自動終了として扱われる |
 
 HOST は `mode` の `onValue` リスナーで「直近の非 agenda モード」を `previousMode` として追い続け、
 `agenda` の `onValue` リスナーで「`agenda` が値あり→無しに変わった」ことを検知する。
-このとき **HOST 自身が `applyMode()` や `toggleAgendaVideo()` の明示操作で `agenda` を消した場合**は
-`manualStop` フラグ（1 回消費）で `mode=previousMode` の書き戻しを抑止し、
-**MAIN 側の自動終了（動画の `onended`）で `agenda` が消えた場合だけ** `mode=previousMode` を書く。
+このとき何をすべきかは [`web/src/shared/agenda.js`](../web/src/shared/agenda.js) の `agendaClearAction()`
+（純粋関数、`tests/unit/agenda.test.mjs` でテスト）が次の 2 つの事実だけから決める:
+
+- **HOST 自身が起こした削除か**（`false` なら MAIN 側の自動終了）
+- **この直後に別の agenda 値を書く予定か**（`toggleAgendaVideo()` が動画↔動画・画像→動画のように
+  別項目へ切り替え中なら true。この場合 `currentAgendaKey` とボタン表示は呼び出し側がすでに
+  新しい値へ更新済みなので、リスナー側は **何もしない**。ここを「HOST 起因なら常にリセットする」に
+  してしまうと、切替先のボタンが「■ 再生中」の見た目のまま内部状態だけ null に戻り、次に押しても
+  停止できず再生し直してしまう回帰になる。PR #92 のレビューで実際に見つかった）
+
+呼び出し側（`web/host/index.html`）は `applyMode()` / `toggleAgendaVideo()` がこの 2 つの事実を
+`markAgendaClear(replacing)` で 1 回だけ予約し、リスナーが消費する。何も予約されていなければ
+MAIN 側の自動終了（動画の `onended`）とみなし、見た目のリセットと `mode=previousMode` の両方を行う。
 `agendaIsSet`（直前の `agenda` が値ありだったか）も併せて追跡し、HOST 起動直後の購読開始イベント
 （`agenda` が最初から null）で誤って `mode` を書き戻さないようにしている。
 
