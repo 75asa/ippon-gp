@@ -63,6 +63,19 @@ export function shouldWriteNow(lastWriteAt, now, minIntervalMs, finished) {
   return now - lastWriteAt >= minIntervalMs;
 }
 
+// clients/main への書き込みを実際に行うべきかを 1 か所で判断する。
+// force = true（RTDB に再接続した直後など）は、内容が同じでも・直前に書いたばかりでも間引かずに必ず書く。
+// これが無いと、onDisconnect().remove() は再接続時に自動で再登録されない（Firebase の既知の仕様）ため、
+// 「Wi-Fi が一瞬切れて RTDB がサーバー側で clients/main を消す → 復帰後も MAIN の読み込み状態自体は
+// 変わらないので statusEquals が真になり、二度と書き直されない」というすり抜けが起きる。
+// 呼び出し側は再接続イベント（.info/connected）のたびに onDisconnect を再登録し、force=true で呼ぶこと。
+export function shouldPublish(prev, next, lastWriteAt, now, minIntervalMs, force) {
+  if (force) return true;
+  if (statusEquals(prev, next)) return false;
+  const finished = next.loaded + next.failedCount >= next.total;
+  return shouldWriteNow(lastWriteAt, now, minIntervalMs, finished);
+}
+
 // HOST 側の表示用: 進行中 / 完了 / 一部失敗 を判定する
 export function mainStatusPhase(v) {
   if (!v || typeof v.loaded !== 'number' || typeof v.total !== 'number' || v.total <= 0) return 'unknown';

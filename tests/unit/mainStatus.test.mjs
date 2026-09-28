@@ -9,6 +9,7 @@ import {
   buildMainStatus,
   statusEquals,
   shouldWriteNow,
+  shouldPublish,
   mainStatusPhase,
 } from '../../web/src/shared/mainStatus.js';
 
@@ -84,6 +85,30 @@ test('shouldWriteNow: finished なら間引かない', () => {
 test('shouldWriteNow: 間隔が短ければ間引く、十分空けば書く', () => {
   assert.equal(shouldWriteNow(1000, 1200, 300, false), false);
   assert.equal(shouldWriteNow(1000, 1300, 300, false), true);
+});
+
+test('shouldPublish: 内容が変わっていれば十分に時間が空いたときだけ書く', () => {
+  const prev = { loaded: 1, total: 5, failed: [], failedCount: 0 };
+  const next = { loaded: 2, total: 5, failed: [], failedCount: 0 };
+  assert.equal(shouldPublish(prev, next, 1000, 1200, 300, false), false, '間隔が短ければ間引く');
+  assert.equal(shouldPublish(prev, next, 1000, 1300, 300, false), true, '十分空けば書く');
+});
+
+test('shouldPublish: 内容が同じなら force が無い限り書かない', () => {
+  const same = { loaded: 3, total: 5, failed: [], failedCount: 0 };
+  assert.equal(shouldPublish(same, { ...same }, 1000, 5000, 300, false), false);
+});
+
+test('shouldPublish: force=true は再接続直後など、内容が同じ・間隔が短くても必ず書く（onDisconnect 再登録後のすり抜け対策）', () => {
+  const same = { loaded: 3, total: 5, failed: [], failedCount: 0 };
+  // 内容が同じ・直前に書いたばかり（1ms 後）でも force なら書く
+  assert.equal(shouldPublish(same, { ...same }, 1000, 1001, 300, true), true);
+});
+
+test('shouldPublish: finished（読み込み完了・失敗確定）は間引かない', () => {
+  const prev = { loaded: 4, total: 5, failed: [], failedCount: 0 };
+  const next = { loaded: 5, total: 5, failed: [], failedCount: 0 }; // finished
+  assert.equal(shouldPublish(prev, next, 1000, 1001, 300, false), true);
 });
 
 test('mainStatusPhase: データが無い/形が違うと unknown', () => {
