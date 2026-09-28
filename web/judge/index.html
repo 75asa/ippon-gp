@@ -65,8 +65,7 @@ body { background: #000; font-family: sans-serif; display: flex; flex-direction:
 <button id="all-btn" onclick="showAll()">全員</button>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
-import { getDatabase, ref, set, onValue, runTransaction, onDisconnect, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
+import { initializeApp, getDatabase, ref, set, onValue, runTransaction, onDisconnect, serverTimestamp } from "../src/shared/firebase.js";
 import { JUDGES_PATH, judgesFromValue } from "../src/shared/judges.js";
 import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue } from "../src/shared/ippon.js";
 import { SEATS_PATH, SEAT_KEY, loadDeviceId, seatState, claimUpdate, releaseUpdate } from "../src/shared/seats.js";

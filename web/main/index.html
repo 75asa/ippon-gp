@@ -124,7 +124,7 @@ body { background: #000; display: flex; align-items: center; justify-content: ce
 .cp { position: absolute; top: 0; border-radius: 2px; animation: confetti-fall linear infinite, confetti-sway ease-in-out infinite; }
 </style>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Black+Han+Sans&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js" integrity="sha384-PMNj1TmCgXfW24/rfIyxYSAWwj2mffkMfguUWv08iNFcy0kTC0JN7E/tE+pJ7+fa" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
 <style>
 /* 素材の読み込み状況（#26）。全画面中は出さない */
@@ -380,8 +380,7 @@ body { background: #000; display: flex; align-items: center; justify-content: ce
 </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
-import { getDatabase, ref, onValue, remove, get } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
+import { initializeApp, getDatabase, ref, onValue, remove, get } from "../src/shared/firebase.js";
 import { CODEC_DEFAULTS, preferCodec, setBitrateHints } from "../src/shared/sdp.js";
 import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue, voteStep } from "../src/shared/ippon.js";
 import { PLAYERS_PATH, PLAYER_COUNT, playerAt, scoreIndex, playersFromValue, escapeHtml } from "../src/shared/players.js";
