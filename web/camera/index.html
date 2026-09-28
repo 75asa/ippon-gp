@@ -120,6 +120,7 @@ body { background: #000; height: 100dvh; overflow: hidden; position: relative; }
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
 import { getDatabase, ref, set, remove } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
+import { CODEC_DEFAULTS, preferCodec, watchSendingCodec } from "../src/shared/sdp.js";
 
 const STORAGE_BASE = window.IPPON_CONFIG.storageBase;
 
@@ -132,11 +133,26 @@ let peer = null;
 let stream = null;
 let facing = 'environment';
 let roomId = null;
+let currentCodec = ''; // 実際に送っているコーデック（H264 / VP8 など）。当日の切り分け用に表示する
+const codecWatchers = new Set(); // 送信コーデックを確認中の監視（止める関数）
+
+// 接続が上がってから送信コーデックが分かるまで getStats を見て、状態表示に出す
+function watchCodec(pc) {
+  const stop = watchSendingCodec(pc, c => {
+    codecWatchers.delete(stop);
+    currentCodec = c.replace('video/', '');
+    if (peer) updateStatus('MAIN画面に配信中');
+  });
+  codecWatchers.add(stop);
+}
+function stopCodecWatchers() {
+  codecWatchers.forEach(stop => stop());
+  codecWatchers.clear();
+}
 
 // カメラ / エンコード設定。config.js の IPPON_CONFIG.camera で上書きできる
-const CAMERA = Object.assign({
+const CAMERA = Object.assign({}, CODEC_DEFAULTS, {
   width: 1920, height: 1080, frameRate: 30,
-  maxBitrate: 6000000,
   // 帯域が足りない時にフレームレートを落として解像度を守る（顔のアップは動きが少ないので解像度優先）
   degradationPreference: 'maintain-resolution',
   contentHint: 'detail',
@@ -156,7 +172,7 @@ function updateStatus(text) {
   const t = stream && stream.getVideoTracks()[0];
   const st = t && t.getSettings ? t.getSettings() : null;
   const res = st && st.width ? ` ${st.width}×${st.height}` : '';
-  document.getElementById('status').textContent = text + res;
+  document.getElementById('status').textContent = text + res + (currentCodec ? ` ${currentCodec}` : '');
 }
 
 function genId() {
@@ -183,7 +199,7 @@ function hookCall(call) {
   call.on('stream', apply);
   call.on('iceStateChanged', apply);
   const pc = call.peerConnection;
-  if (pc) pc.addEventListener('connectionstatechange', () => { if (pc.connectionState === 'connected') apply(); });
+  if (pc) pc.addEventListener('connectionstatechange', () => { if (pc.connectionState === 'connected') { apply(); watchCodec(pc); } });
 }
 
 // スリープ防止
@@ -247,7 +263,8 @@ window.startCamera = async function() {
     dc.on('data', msg => {
       if (msg.startsWith('join:')) {
         const viewerId = msg.replace('join:', '');
-        const call = peer.call(viewerId, stream);
+        // H.264 を先頭にした offer を出す（スマホのハードウェアエンコーダを使わせる。無ければ VP8 / VP9 のまま）
+        const call = peer.call(viewerId, stream, { sdpTransform: sdp => preferCodec(sdp, CAMERA.preferredCodec) });
         hookCall(call);
       }
     });
@@ -265,6 +282,8 @@ window.startCamera = async function() {
 
 window.flipCam = async function() {
   facing = facing === 'environment' ? 'user' : 'environment';
+  stopCodecWatchers();
+  currentCodec = '';
   if (stream) stream.getTracks().forEach(t => t.stop());
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints(), audio: false });
@@ -279,6 +298,7 @@ window.flipCam = async function() {
             if (s.track && s.track.kind === 'video') await s.replaceTrack(track);
           }
           await applyEncodingParams(pc);  // 新しいトラックには encodings が引き継がれない
+          if (pc.connectionState === 'connected') watchCodec(pc); // カメラによってコーデックが変わることがある
         }
       }
     }
@@ -287,6 +307,8 @@ window.flipCam = async function() {
 };
 
 window.stopCamera = function() {
+  stopCodecWatchers();
+  currentCodec = '';
   if (stream) stream.getTracks().forEach(t => t.stop());
   if (peer) peer.destroy();
   peer = null; stream = null; roomId = null;
