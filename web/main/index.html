@@ -384,6 +384,7 @@ import { initializeApp, getDatabase, ref, onValue, remove, get } from "../src/sh
 import { CODEC_DEFAULTS, preferCodec, setBitrateHints } from "../src/shared/sdp.js";
 import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue, voteStep } from "../src/shared/ippon.js";
 import { PLAYERS_PATH, PLAYER_COUNT, playerAt, scoreIndex, playersFromValue, escapeHtml } from "../src/shared/players.js";
+import { ODAI_COUNT_PATH, DEFAULT_ODAI_COUNT, odaiCountFromValue } from "../src/shared/odai.js";
 
 const STORAGE_BASE = window.IPPON_CONFIG.storageBase;
 
@@ -597,6 +598,11 @@ const db = getDatabase(app);
 let currentVotes = 0;
 let currentRevealed = false;
 let currentMode = '';
+
+// お題数（設定画面で変更。無ければ 6）。HOST 側で既に上限を超える odai は送られない前提だが、
+// 設定を下げた直後などに古い odai が残っていても表示しないための保険
+let odaiCount = DEFAULT_ODAI_COUNT;
+onValue(ref(db, ODAI_COUNT_PATH), (snap) => { odaiCount = odaiCountFromValue(snap.val()); });
 
 window.goFullscreen = () => {
   document.documentElement.requestFullscreen();
@@ -958,7 +964,7 @@ onValue(ref(db, 'odai'), (snapshot) => {
     if (el) el.style.display = 'none';
   });
   document.getElementById('odai-img').style.display = 'none'; [1,2,3,4,5,6].forEach(function(n){var el=document.getElementById('odai-img-'+n);if(el)el.style.display='none';});
-  if (odaiNum) {
+  if (odaiNum && odaiNum <= odaiCount) {
     var cached = document.getElementById('odai-img-' + odaiNum);
     if (cached) {
       cached.style.display = 'block';

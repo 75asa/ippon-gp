@@ -28,10 +28,10 @@
 
 | 画面 | 読む | 書く |
 |---|---|---|
-| HOST | `votes`, `scores`, `mode`, `se_master`, `se_trigger`, `agenda`, `answer_text`, `settings/players`, `settings/ipponThreshold` | ほぼ全部（下記スキーマ参照） |
-| MAIN | `mode`, `taiki`, `odai`, `votes`, `revealed`, `scores`, `agenda`, `answer_text`, `keep_audio`, `camera_room` | `agenda` の削除（動画終了時） |
+| HOST | `votes`, `scores`, `mode`, `se_master`, `se_trigger`, `agenda`, `answer_text`, `settings/players`, `settings/ipponThreshold`, `settings/odaiCount` | ほぼ全部（下記スキーマ参照） |
+| MAIN | `mode`, `taiki`, `odai`, `votes`, `revealed`, `scores`, `agenda`, `answer_text`, `keep_audio`, `camera_room`, `settings/odaiCount` | `agenda` の削除（動画終了時） |
 | JUDGE | `mode`, `revealed`, `votes`, `seats`, `settings/judges`, `settings/ipponThreshold` | `votes/{seat} = true`、`seats/{seat}`（座席ロック） |
-| ADMIN（設定画面） | `settings/players`, `settings/judges`, `settings/ipponThreshold`, `votes` | `settings/judges`（票がある間は名前・種別のみ）、`settings/ipponThreshold`（票が無いときのみ）、`settings/players`（いつでも） |
+| ADMIN（設定画面） | `settings/players`, `settings/judges`, `settings/ipponThreshold`, `settings/odaiCount`, `votes` | `settings/judges`（票がある間は名前・種別のみ）、`settings/ipponThreshold`（票が無いときのみ）、`settings/players`（いつでも）、`settings/odaiCount`（いつでも） |
 | CAM | — | `camera_room`（PeerJS ルーム ID の公開 / 削除） |
 
 ## 3. RTDB スキーマ（ルート直下、フラット）
@@ -40,7 +40,7 @@
 |---|---|---|---|
 | `mode` | `'taiki' \| 'odai' \| 'saiten' \| 'scoreboard' \| 'agenda'` | MAIN の表示モード | HOST |
 | `taiki` | `true` / 削除 | 待機画像の表示フラグ | HOST |
-| `odai` | `1..6` / 削除 | 表示中のお題番号 | HOST |
+| `odai` | `1..N` / 削除 | 表示中のお題番号（N = `settings/odaiCount`、無ければ 6） | HOST |
 | `votes` | `{ [seat: 1..10]: true }` | 投票済み座席。キー数 = 票数 | JUDGE / HOST(削除) |
 | `revealed` | `boolean` | 「点数を公開」済みか | HOST |
 | `scores` | `number[5]` | 回答者 5 名の累積スコア。`scores[N-1]` が回答者 N（顔写真 `portrait_playerN`）。画面は左から回答者 5 → 1 の順なので、表示位置との変換は `web/src/shared/players.js` の `playerAt()` / `scoreIndex()` で行う | HOST |
@@ -54,6 +54,7 @@
 | `settings/judges` | `{ [seat: 1..N]: { name, kind: 'panel'\|'venue' } }` / 削除 | 審査員の席（N = 定員 1〜10 かつ IPPON に必要な票数以上、席番号は連番）。無ければ `web/src/shared/judges.js` の初期値 10 席。`votes` はここにある席にだけ入る | ADMIN |
 | `settings/ipponThreshold` | `1..10`（整数）/ 削除 | IPPON に必要な票数。審査員の定員以下。無ければ 6（`web/src/shared/ippon.js`） | ADMIN |
 | `settings/players` | `{ [N: 1..5]: { last, first? } }` / 削除 | 回答者の名前（上段は必須、下段は省略可）。無ければ `web/src/shared/players.js` の初期値 | ADMIN |
+| `settings/odaiCount` | `1..6`（整数）/ 削除 | お題数。HOST の「問1」〜「問N」ボタン・読み上げボタンと MAIN の `odai_1..N` 表示の上限。素材（お題画像・読み上げ音声）が 6 問分までなのでこの範囲。無ければ 6（`web/src/shared/odai.js`） | ADMIN |
 
 ### 3.1 既知の設計課題
 
@@ -62,6 +63,7 @@
 - **状態遷移が暗黙的**: `showTaiki()` は `agenda` を削除 → HOST 側の `agenda` リスナーが `mode` を `previousMode` に戻す → その後 `mode='taiki'` を書く、という順序依存がある。競合するとモードが巻き戻る恐れ。
 - **`answer_text` と `agenda` の二重経路**（テキスト投影 → 画像投影に切り替えた名残）。
 - **`keep_audio` の 2 秒 setTimeout** はタイミングハック。
+- **回答者数（5）は未設定化（#18）**: `scores` は要素 5 個ちょうどのルール、HOST の PC スコア欄（`sc-0..4` / `addScore(0..4,±1)`）とスマホのサブ画面（`sub-score-0..4`）、MAIN のスコアボード（`renderScoreboard()` の卓の連結装飾 SVG が卓 5 台前提の座標で書かれている）が、いずれも 5 人分を前提にした固定マークアップ・固定ロジックで書かれており、生成的に N 人分へ展開していない。設定値を追加するだけでは動かず、この 3 箇所を N 人分のテンプレート化・座標の一般化にリファクタする必要があるため、お題数（#18 の残り）とは切り離して別途対応する。
 
 ## 4. 投票 → 演出パイプライン
 
