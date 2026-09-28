@@ -55,6 +55,11 @@ const del = (path) => ({ method: 'DELETE', path });
 // settings/players の値を作る（回答者 1..5）
 const players = () => Object.fromEntries([1, 2, 3, 4, 5].map((n) => [String(n), { last: `P${n}`, first: `F${n}` }]));
 
+// seats/{seat} の値を作る（at はサーバー時刻）
+const seat = (device) => ({ device, at: { '.sv': 'timestamp' } });
+const DEV_A = 'dabcdef1234';
+const DEV_B = 'dzyxwvu9876';
+
 // settings/judges の値を作る（席 1..n、7 席目以降は会場審査員）
 const judges = (n) => Object.fromEntries(
   Array.from({ length: n }, (_, i) => [String(i + 1), { name: `J${i + 1}`, kind: i >= 6 ? 'venue' : 'panel' }]),
@@ -225,6 +230,30 @@ const cases = [
   ['投票中でも回答者の名前は変えられる', put('/settings/players/3/last', 'TOKUMOTO2'), ALLOW],
   ['後片付け: votes を消す（回答者）', del('/votes'), ALLOW],
   ['settings/players を消せる（初期値に戻す）', del('/settings/players'), ALLOW],
+
+  // seats（座席ロック）。ここに来た時点で votes・settings は空
+  ['seats/1 を端末 A が取れる', put('/seats/1', seat(DEV_A)), ALLOW],
+  ['seats/1 を端末 B が上書きするのは拒否', put('/seats/1', seat(DEV_B)), DENY],
+  ['seats/1 を端末 A が取り直せる', put('/seats/1', seat(DEV_A)), ALLOW],
+  ['seats/2 の端末 ID の形が不正だと拒否', put('/seats/2', seat('evil<script>')), DENY],
+  ['seats/2 の at が未来だと拒否', put('/seats/2', { device: DEV_B, at: Date.now() + 3600e3 }), DENY],
+  ['seats/2 の at が無いと拒否', put('/seats/2', { device: DEV_B }), DENY],
+  ['seats/2 に余計なフィールドがあると拒否', put('/seats/2', { ...seat(DEV_B), x: 1 }), DENY],
+  ['seats/11 は席の範囲外で拒否', put('/seats/11', seat(DEV_B)), DENY],
+  ['seats/1 の device だけを端末 B に書き換えるのは拒否', put('/seats/1/device', DEV_B), DENY],
+  ['seats/1 を端末 B が from 違いで引き継ぐのは拒否', put('/seats/1', { ...seat(DEV_B), from: 'dnotowner99' }), DENY],
+  ['seats/1 を端末 B が from = 今の持ち主で引き継げる（長押し）', put('/seats/1', { ...seat(DEV_B), from: DEV_A }), ALLOW],
+  ['引き継がれた seats/1 を端末 A が普通に取り返すのは拒否', put('/seats/1', seat(DEV_A)), DENY],
+  ['seats/1 を端末 B が取り直せる（from なし）', put('/seats/1', seat(DEV_B)), ALLOW],
+  ['seats/2 の from の形が不正だと拒否', put('/seats/2', { ...seat(DEV_A), from: 'x' }), DENY],
+  ['seats/1 を外せる（戻る・onDisconnect・長押しの引き継ぎ）', del('/seats/1'), ALLOW],
+  ['外れた seats/1 を端末 A が取れる', put('/seats/1', seat(DEV_A)), ALLOW],
+  ['審査員を 8 席に設定', put('/settings/judges', judges(8)), ALLOW],
+  ['seats/9 は設定に無い席なので拒否', put('/seats/9', seat(DEV_A)), DENY],
+  ['seats/8 は設定にある席なので許可', put('/seats/8', seat(DEV_A)), ALLOW],
+  ['seats 全体を消せる（設定画面の片付け）', del('/seats'), ALLOW],
+  ['seats 全体への一括書き込みは拒否', put('/seats', { 1: seat(DEV_A) }), DENY],
+  ['後片付け: 審査員の設定を消す（座席）', del('/settings/judges'), ALLOW],
 
   // 読み取り
   ['ルートの読み取りは誰でも可', { method: 'GET', path: '/' }, ALLOW],

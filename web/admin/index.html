@@ -155,6 +155,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/fireba
 import { getDatabase, ref, set, update, remove, onValue } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
 import { JUDGES_PATH, MIN_SEATS, MAX_SEATS, NAME_MAX, KINDS, judgesFromValue, judgesToRecord, validateJudges } from "../src/shared/judges.js";
 import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue } from "../src/shared/ippon.js";
+import { SEATS_PATH } from "../src/shared/seats.js";
 import { PLAYERS_PATH, NAME_MAX as PLAYER_NAME_MAX, playersFromValue, playersToRecord, validatePlayers } from "../src/shared/players.js";
 
 const app = initializeApp(window.IPPON_CONFIG.firebase);
@@ -328,6 +329,10 @@ async function save() {
   try {
     if (!locked()) {
       await set(ref(db, JUDGES_PATH), judgesToRecord(draft));
+      // 定員を減らしたら、消えた席の座席ロック（#25）も外す
+      const removed = {};
+      for (let seat = draft.length + 1; seat <= MAX_SEATS; seat++) removed[seat] = null;
+      if (Object.keys(removed).length) await update(ref(db, SEATS_PATH), removed);
     } else {
       // 投票中: 既にある席の名前・種別だけを書く（ルールもこれだけを許可している）
       const updates = {};

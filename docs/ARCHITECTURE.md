@@ -30,7 +30,7 @@
 |---|---|---|
 | HOST | `votes`, `scores`, `mode`, `se_master`, `se_trigger`, `agenda`, `answer_text`, `settings/players`, `settings/ipponThreshold` | ほぼ全部（下記スキーマ参照） |
 | MAIN | `mode`, `taiki`, `odai`, `votes`, `revealed`, `scores`, `agenda`, `answer_text`, `keep_audio`, `camera_room` | `agenda` の削除（動画終了時） |
-| JUDGE | `mode`, `revealed`, `votes`, `settings/judges`, `settings/ipponThreshold` | `votes/{seat} = true` |
+| JUDGE | `mode`, `revealed`, `votes`, `seats`, `settings/judges`, `settings/ipponThreshold` | `votes/{seat} = true`、`seats/{seat}`（座席ロック） |
 | ADMIN（設定画面） | `settings/players`, `settings/judges`, `settings/ipponThreshold`, `votes` | `settings/judges`（票がある間は名前・種別のみ）、`settings/ipponThreshold`（票が無いときのみ）、`settings/players`（いつでも） |
 | CAM | — | `camera_room`（PeerJS ルーム ID の公開 / 削除） |
 
@@ -50,6 +50,7 @@
 | `se_master` | string（端末 ID） | SE を実際に再生する HOST 端末 | HOST |
 | `se_trigger` | `{ key, action:'play'\|'stop', ts }` | SE 再生イベント（`laugh_1..4`, `se_cheer`, `se_clap`） | HOST |
 | `camera_room` | string / 削除 | PeerJS ルーム ID（`ippon-host-{id}`） | CAM |
+| `seats` | `{ [seat]: { device, at, from? } }` / 削除 | 審査員の座席ロック（#25）。1 席を持てるのは 1 台（`device` = 端末ごとの ID、localStorage に保存）。端末が消えると `onDisconnect` で外れる。使用中の席は JUDGE で長押しすると引き継げる（`from` = 前の持ち主を入れて 1 回で上書きする。席が空かないので前の端末と取り合いにならず、前の端末は席選択に戻る）。再読み込みすると前回の席に戻る | JUDGE / ADMIN(削除) |
 | `settings/judges` | `{ [seat: 1..N]: { name, kind: 'panel'\|'venue' } }` / 削除 | 審査員の席（N = 定員 1〜10 かつ IPPON に必要な票数以上、席番号は連番）。無ければ `web/src/shared/judges.js` の初期値 10 席。`votes` はここにある席にだけ入る | ADMIN |
 | `settings/ipponThreshold` | `1..10`（整数）/ 削除 | IPPON に必要な票数。審査員の定員以下。無ければ 6（`web/src/shared/ippon.js`） | ADMIN |
 | `settings/players` | `{ [N: 1..5]: { last, first? } }` / 削除 | 回答者の名前（上段は必須、下段は省略可）。無ければ `web/src/shared/players.js` の初期値 | ADMIN |
