@@ -139,6 +139,27 @@
       ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,64}$/)"
     },
 
+    "clients": {
+      /* 各画面の簡易ステータス公開（#26。今のところ MAIN の素材読み込み状況のみ）。
+         2 つ MAIN タブが開いている場合は最後に書いた方が勝つ（last-writer-wins）。
+         MAIN が閉じる／リロードされると onDisconnect().remove() で消える（共有ノードなので、
+         もう 1 つの MAIN タブがまだ生きていても消えてしまう点は許容する） */
+      "main": {
+        ".write": true,
+        ".validate": "newData.hasChildren(['loaded', 'total', 'ts'])",
+        "loaded":      { ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= 999" },
+        "total":       { ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= 999" },
+        "failedCount": { ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= 999" },
+        /* 失敗した素材の短いパス一覧。最大 10 件（$i は 1 桁のみ = 添字 0..9）。実際の失敗件数は failedCount */
+        "failed": {
+          "$i": { ".validate": "$i.matches(/^[0-9]$/) && newData.isString() && newData.val().length <= 100" }
+        },
+        "ts": { ".validate": "newData.isNumber() && newData.val() <= now" },
+        "$other": { ".validate": false }
+      },
+      "$other": { ".write": false, ".validate": false }
+    },
+
     /* 上記以外のトップレベルキーは一切書けない（ルートに .write が無いので既定で拒否だが、意図を明示） */
     "$other": {
       ".write": false,

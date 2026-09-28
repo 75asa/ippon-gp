@@ -255,6 +255,24 @@ const cases = [
   ['seats 全体への一括書き込みは拒否', put('/seats', { 1: seat(DEV_A) }), DENY],
   ['後片付け: 審査員の設定を消す（座席）', del('/settings/judges'), ALLOW],
 
+  // clients/main（MAIN の素材読み込み状況。#26）
+  ['clients/main {loaded,total,ts} は許可', put('/clients/main', { loaded: 51, total: 51, ts: { '.sv': 'timestamp' } }), ALLOW],
+  ['clients/main に failed / failedCount を付けても許可', put('/clients/main', { loaded: 44, total: 51, failed: ['a.png', 'b.png'], failedCount: 2, ts: { '.sv': 'timestamp' } }), ALLOW],
+  ['clients/main の ts が欠けると拒否', put('/clients/main', { loaded: 1, total: 1 }), DENY],
+  ['clients/main の total が文字列だと拒否', put('/clients/main', { loaded: 1, total: '1', ts: { '.sv': 'timestamp' } }), DENY],
+  ['clients/main の loaded が負数だと拒否', put('/clients/main', { loaded: -1, total: 1, ts: { '.sv': 'timestamp' } }), DENY],
+  ['clients/main の loaded が小数だと拒否', put('/clients/main', { loaded: 1.5, total: 1, ts: { '.sv': 'timestamp' } }), DENY],
+  ['clients/main の ts が未来だと拒否', put('/clients/main', { loaded: 1, total: 1, ts: Date.now() + 3600e3 }), DENY],
+  ['clients/main に余計なフィールドがあると拒否', put('/clients/main', { loaded: 1, total: 1, ts: { '.sv': 'timestamp' }, x: 1 }), DENY],
+  ['clients/main の failed が 10 件ちょうどなら許可', put('/clients/main', { loaded: 0, total: 20, failed: Array.from({ length: 10 }, (_, i) => `f${i}`), failedCount: 10, ts: { '.sv': 'timestamp' } }), ALLOW],
+  ['clients/main の failed が 11 件だと拒否（添字が 2 桁になる）', put('/clients/main', { loaded: 0, total: 20, failed: Array.from({ length: 11 }, (_, i) => `f${i}`), failedCount: 11, ts: { '.sv': 'timestamp' } }), DENY],
+  ['clients/main の failed の要素が長すぎると拒否', put('/clients/main', { loaded: 0, total: 1, failed: ['a'.repeat(101)], failedCount: 1, ts: { '.sv': 'timestamp' } }), DENY],
+  ['clients/main の failed の要素が数値だと拒否', put('/clients/main', { loaded: 0, total: 1, failed: [1], failedCount: 1, ts: { '.sv': 'timestamp' } }), DENY],
+  ['clients/main は MAIN が閉じたときに消せる（onDisconnect）', del('/clients/main'), ALLOW],
+  ['clients に main 以外の子（未知の画面）は書けない', put('/clients/host', { loaded: 1, total: 1, ts: { '.sv': 'timestamp' } }), DENY],
+  ['clients 全体への一括書き込みは拒否', put('/clients', { main: { loaded: 1, total: 1, ts: { '.sv': 'timestamp' } } }), DENY],
+  ['後片付け: clients/main を消す', del('/clients/main'), ALLOW],
+
   // 読み取り
   ['ルートの読み取りは誰でも可', { method: 'GET', path: '/' }, ALLOW],
 ];
