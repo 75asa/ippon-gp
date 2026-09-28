@@ -157,6 +157,12 @@ h1 { color: #f5c400; font-size: 14px; letter-spacing: 2px; margin-bottom: 6px; }
   <button id="master-btn" onclick="window.becomeMaster()" style="background:#1a2a1a;border:1px solid #44aa44;color:#88ff88;font-size:11px;padding:3px 12px;border-radius:6px;cursor:pointer;margin-left:auto;">マスターになる</button>
 </div>
 
+<!-- 配信品質（#63）。MAIN が書く camera_quality を購読して表示。原因の切り分けは REHEARSAL.md 参照 -->
+<div id="camera-quality-bar" style="width:94vw;margin:0 auto 4px;background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:6px 10px;display:flex;align-items:center;gap:10px;">
+  <span style="font-size:11px;color:#aaa;">🎥 CAM:</span>
+  <span id="camera-quality-label" style="font-size:11px;color:#888;">未接続</span>
+</div>
+
 
 
 <div id="agenda-wrap" style="width:94vw;margin:10px auto 0;background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:5px;">
@@ -190,6 +196,7 @@ h1 { color: #f5c400; font-size: 14px; letter-spacing: 2px; margin-bottom: 6px; }
 import { initializeApp, getDatabase, ref, set, remove, onValue, get } from '../src/shared/firebase.js';
 import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue, voteStep } from '../src/shared/ippon.js';
 import { PLAYERS_PATH, PLAYER_COUNT, playerAt, scoreIndex, playersFromValue } from '../src/shared/players.js';
+import { formatQualityRecord } from '../src/shared/webrtc-stats.js';
 
 const STORAGE_BASE = window.IPPON_CONFIG.storageBase;
 
@@ -406,6 +413,17 @@ function playNextInQueue() {
   }
   setTimeout(playNextInQueue, 50);
 }
+
+// 配信品質（#63）。MAIN が変化時のみ低頻度で書く camera_quality を表示。qualityLimitationReason が
+// bandwidth / cpu のときは赤くして、原因の切り分けを促す（詳しくは docs/RUNBOOK.md・REHEARSAL.md）
+onValue(ref(db, 'camera_quality'), (snap) => {
+  const q = snap.val();
+  const el = document.getElementById('camera-quality-label');
+  if (!q) { el.textContent = '未接続'; el.style.color = '#888'; return; }
+  const bad = q.limit === 'bandwidth' || q.limit === 'cpu';
+  el.textContent = formatQualityRecord(q) || '未接続';
+  el.style.color = bad ? '#ff5555' : '#8f8';
+});
 
 // 投票数監視（50msデバウンス）
 let voteDebounce = null;
