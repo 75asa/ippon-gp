@@ -20,6 +20,34 @@ function codecMime(report, codecId) {
   return c ? c.mimeType : null;
 }
 
+// 選ばれている candidate-pair を探す。ブラウザ間の差を吸収するため nominated+succeeded を優先し、
+// 無ければ selected（Chrome の古い実装。将来的に無くなる想定の互換フラグ）にフォールバックする。
+function findSelectedPair(report) {
+  let pair = null;
+  report.forEach((s) => { if (s.type === 'candidate-pair' && s.nominated && s.state === 'succeeded') pair = s; });
+  if (!pair) report.forEach((s) => { if (s.type === 'candidate-pair' && s.selected) pair = s; });
+  return pair;
+}
+
+/**
+ * getStats() の report から、選ばれている ICE candidate pair の local/remote 種別
+ * （'host' | 'srflx' | 'prflx' | 'relay'）を取り出す。まだ選ばれていなければ null。
+ * TURN を使っていない構成（#63 参照）では 'relay' は基本出ない。会場 Wi-Fi をまたいで
+ * NAT 越え（'srflx'）になっていないか＝画質低下がエンコーダ制限か経路かの切り分けに使う。
+ */
+export function readCandidatePairStats(report) {
+  if (!report) return null;
+  const pair = findSelectedPair(report);
+  if (!pair || !report.get) return null;
+  const local = report.get(pair.localCandidateId);
+  const remote = report.get(pair.remoteCandidateId);
+  if (!local && !remote) return null;
+  return {
+    local: local ? local.candidateType || null : null,
+    remote: remote ? remote.candidateType || null : null,
+  };
+}
+
 /**
  * getStats() の 1 回分の report から、指定方向（'outbound' | 'inbound'）・種類（既定 'video'）の
  * rtp 統計を取り出す。無ければ null。
@@ -87,6 +115,7 @@ export function watchQuality(pc, direction, onQuality, { intervalMs = 2000, kind
           kbps: kbps != null ? Math.round(kbps) : null,
           codec: shortCodec(curr.codec),
           limit: curr.qualityLimitationReason,
+          path: readCandidatePairStats(report),
         });
         prev = curr;
       }
@@ -103,7 +132,16 @@ function formatMbps(kbps) {
   return kbps >= 1000 ? `${(kbps / 1000).toFixed(1)}Mbps` : `${Math.round(kbps)}kbps`;
 }
 
-/** CAM / MAIN の画面表示用。q = { width, height, fps, kbps, codec, limit }（watchQuality の出力そのもの） */
+// host/host（同一ネットワーク内で直結）なら何も付けない。片方でも NAT 越え（srflx）だと '[NAT]'、
+// TURN 非対応構成のはずの relay が出たら '[RELAY?]' として異常を目立たせる（#63 コメント参照）
+function formatPath(path) {
+  if (!path || (!path.local && !path.remote)) return '';
+  if (path.local === 'host' && path.remote === 'host') return '';
+  if (path.local === 'relay' || path.remote === 'relay') return ' [RELAY?]';
+  return ' [NAT]';
+}
+
+/** CAM / MAIN の画面表示用。q = { width, height, fps, kbps, codec, limit, path }（watchQuality の出力そのもの） */
 export function formatQuality(q) {
   if (!q || !q.width) return '';
   const res = `${q.width}×${q.height}`;
@@ -111,10 +149,10 @@ export function formatQuality(q) {
   const mbps = formatMbps(q.kbps);
   const codec = q.codec || '';
   const limit = q.limit && q.limit !== 'none' ? ` (${q.limit})` : '';
-  return [res, fps, mbps, codec].filter(Boolean).join(' ') + limit;
+  return [res, fps, mbps, codec].filter(Boolean).join(' ') + limit + formatPath(q.path);
 }
 
-/** HOST 表示用。rec = RTDB の camera_quality（{ res: "1920x1080", fps, kbps, codec, limit, ts }） */
+/** HOST 表示用。rec = RTDB の camera_quality（{ res: "1920x1080", fps, kbps, codec, limit, path, ts }） */
 export function formatQualityRecord(rec) {
   if (!rec || !rec.res) return '';
   const res = rec.res.replace('x', '×');
@@ -122,7 +160,8 @@ export function formatQualityRecord(rec) {
   const mbps = formatMbps(rec.kbps);
   const codec = rec.codec || '';
   const limit = rec.limit && rec.limit !== 'none' ? ` (${rec.limit})` : '';
-  return [res, fps, mbps, codec].filter(Boolean).join(' ') + limit;
+  const path = rec.path && rec.path !== 'host' ? (rec.path === 'unknown' ? '' : ' [NAT]') : '';
+  return [res, fps, mbps, codec].filter(Boolean).join(' ') + limit + path;
 }
 
 const clampInt = (n, min, max) => Math.max(min, Math.min(max, Math.round(n)));
@@ -134,6 +173,13 @@ const roundKbps = (kbps) => Math.round(kbps / 100) * 100;
  * watchQuality の出力（+ CAM から送られてきた limit）を RTDB camera_quality の形にする。
  * 値は database.rules.json の範囲に収まるよう丸め・クランプする。解像度が無ければ書くものが無いので null。
  */
+// { local, remote } → RTDB に書く 1 語（host/nat/unknown）。relay もひとまず nat に丸める
+// （#63 のコメント参照。この構成は TURN 無しなので relay は基本出ないはずで、出たら経路異常として nat 扱いで十分警告になる）
+function pathToRecordValue(path) {
+  if (!path || (!path.local && !path.remote)) return 'unknown';
+  return path.local === 'host' && path.remote === 'host' ? 'host' : 'nat';
+}
+
 export function toQualityRecord(q, ts = Date.now()) {
   if (!q || !q.width || !q.height) return null;
   const width = clampInt(q.width, 1, 7680);
@@ -142,7 +188,8 @@ export function toQualityRecord(q, ts = Date.now()) {
   const kbps = clampInt(roundKbps(q.kbps || 0), 0, 100000);
   const codec = String(q.codec || 'unknown').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 16) || 'unknown';
   const limit = LIMIT_VALUES.has(q.limit) ? q.limit : 'none';
-  return { res: `${width}x${height}`, fps, kbps, codec, limit, ts };
+  const path = pathToRecordValue(q.path);
+  return { res: `${width}x${height}`, fps, kbps, codec, limit, path, ts };
 }
 
 /** 2 つの camera_quality レコードが「操作員から見て同じ」かどうか（ts は無視。kbps/fps は多少のブレを許す） */
@@ -151,6 +198,7 @@ export function qualityRecordEquals(a, b, { fpsTolerance = 2, kbpsTolerance = 20
   return a.res === b.res
     && a.codec === b.codec
     && a.limit === b.limit
+    && (a.path || 'unknown') === (b.path || 'unknown')
     && Math.abs((a.fps || 0) - (b.fps || 0)) <= fpsTolerance
     && Math.abs((a.kbps || 0) - (b.kbps || 0)) <= kbpsTolerance;
 }

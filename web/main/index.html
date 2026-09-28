@@ -395,10 +395,11 @@ let cameraPeer = null;
 let cameraConnectedRoomId = null;
 
 // ===== 配信品質（#63） =====
-// MAIN の受信側 inbound-rtp（解像度・fps・ビットレート・コーデック）+ CAM から DataConnection で届く
-// qualityLimitationReason（送信側でしか取れない）を合わせて、操作員用パネルに出し、HOST 用に RTDB へも書く。
+// MAIN の受信側 inbound-rtp（解像度・fps・ビットレート・コーデック・selected ICE candidate pair）+
+// CAM から DataConnection で届く qualityLimitationReason（送信側でしか取れない）を合わせて、
+// 操作員用パネルに出し、HOST 用に RTDB へも書く。
 let camLimit = 'none';
-let latestMainQuality = null; // { width, height, fps, kbps, codec } （watchQuality の生の出力。limit は camLimit 側を使う）
+let latestMainQuality = null; // { width, height, fps, kbps, codec, path } （watchQuality の生の出力。limit は camLimit 側を使う）
 let lastPublishedQuality = null; // 直前に camera_quality へ書いた record（比較用。ts は無視）
 const mainQualityWatchers = new Set();
 

@@ -50,7 +50,7 @@
 | `se_master` | string（端末 ID） | SE を実際に再生する HOST 端末 | HOST |
 | `se_trigger` | `{ key, action:'play'\|'stop', ts }` | SE 再生イベント（`laugh_1..4`, `se_cheer`, `se_clap`） | HOST |
 | `camera_room` | string / 削除 | PeerJS ルーム ID（`ippon-host-{id}`） | CAM |
-| `camera_quality` | `{ res, fps, kbps, codec, limit, ts }` / 削除 | 配信品質の要約（#63）。`res` は `"1920x1080"`、`kbps` は 100kbps 単位に丸め、`limit` は `qualityLimitationReason`（`none\|bandwidth\|cpu\|other`）。MAIN の受信側 `getStats()` を 2 秒ごとに見て、値が変わったときだけ 5 秒間隔目安で書く。`limit` は CAM 側でしか取れないため、CAM が PeerJS の DataConnection 経由で MAIN に送ってくる値を使う。HOST はここを購読して「CAM: 1080p 4.2Mbps」のように表示する | MAIN |
+| `camera_quality` | `{ res, fps, kbps, codec, limit, path, ts }` / 削除 | 配信品質の要約（#63）。`res` は `"1920x1080"`、`kbps` は 100kbps 単位に丸め、`limit` は `qualityLimitationReason`（`none\|bandwidth\|cpu\|other`）、`path` は選択された ICE candidate pair の種別（`host`＝同一ネットワーク内で直結、`nat`＝どちらかが NAT 越え、`unknown`＝未取得）。MAIN の受信側 `getStats()` を 2 秒ごとに見て、値が変わったときだけ 5 秒間隔目安で書く。`limit` は CAM 側でしか取れないため、CAM が PeerJS の DataConnection 経由で MAIN に送ってくる値を使う。HOST はここを購読して「CAM: 1080p 4.2Mbps」のように表示する | MAIN |
 | `seats` | `{ [seat]: { device, at, from? } }` / 削除 | 審査員の座席ロック（#25）。1 席を持てるのは 1 台（`device` = 端末ごとの ID、localStorage に保存）。端末が消えると `onDisconnect` で外れる。使用中の席は JUDGE で長押しすると引き継げる（`from` = 前の持ち主を入れて 1 回で上書きする。席が空かないので前の端末と取り合いにならず、前の端末は席選択に戻る）。再読み込みすると前回の席に戻る | JUDGE / ADMIN(削除) |
 | `settings/judges` | `{ [seat: 1..N]: { name, kind: 'panel'\|'venue' } }` / 削除 | 審査員の席（N = 定員 1〜10 かつ IPPON に必要な票数以上、席番号は連番）。無ければ `web/src/shared/judges.js` の初期値 10 席。`votes` はここにある席にだけ入る | ADMIN |
 | `settings/ipponThreshold` | `1..10`（整数）/ 削除 | IPPON に必要な票数。審査員の定員以下。無ければ 6（`web/src/shared/ippon.js`） | ADMIN |
@@ -91,10 +91,10 @@ HOST: 「点数を公開」 set(revealed,true) + no-ippon.mp3
 - CAM が `Peer('ippon-host-' + roomId)` を作り、`camera_room` に roomId を公開。
 - MAIN は `camera_room` を監視 → DataConnection で `join:{myId}` を送る → CAM が `peer.call()` で映像を送る。
 - 8 Mbps / 30fps を `setParameters` で要求。PeerJS の公開シグナリングサーバー（`0.peerjs.com`）と STUN のみ。**TURN 無し**のため会場ネットワークによっては繋がらない。
-- **配信品質の可視化（#63）**: CAM・MAIN とも `web/src/shared/webrtc-stats.js`（純粋関数）を使い、`RTCPeerConnection.getStats()` を 2 秒ごとに見る。
-  - CAM: 送信側 `outbound-rtp` から解像度・fps・ビットレート・`qualityLimitationReason` を出し、status 欄に `1920×1080 30fps 4.2Mbps H264 (bandwidth)` のようにそのまま表示する。同時に `limit`（`qualityLimitationReason`）を PeerJS の DataConnection（MAIN が `join:` を送るのに使っているのと同じ接続）で MAIN に送る。`qualityLimitationReason` は Chrome の送信側にしか無い統計なので、受信側の MAIN 単独では取れない。
-  - MAIN: 受信側 `inbound-rtp` から解像度・fps・ビットレートを出し、CAM から届いた `limit` と合わせてカメラ設定パネル（🎥 カメラ、操作員用。全画面にすると自動で閉じるので客席には映らない）に表示する。値が変わったときだけ 5 秒間隔目安で `camera_quality` に書く。
-  - HOST: `camera_quality` を購読し、既存の音マスターバーの下に「CAM: 1080p 4.2Mbps H264」のように表示。`limit` が `bandwidth` / `cpu` のときは赤くする。
+- **配信品質の可視化（#63）**: CAM・MAIN とも `web/src/shared/webrtc-stats.js`（純粋関数）を使い、`RTCPeerConnection.getStats()` を 2 秒ごとに見る。ビットレートは前回サンプルとの `bytes`/`timestamp` の実差分から計算する（ポーリング間隔がタブのバックグラウンド化などで一定にならなくても、間隔を仮定しないので狂わない。再接続等で `bytes` カウンターがリセット＝新しい SSRC になった回は `null` を返し、誤ったスパイク値を出さない）。
+  - CAM: 送信側 `outbound-rtp` から解像度・fps・ビットレート・`qualityLimitationReason`・selected ICE candidate pair の種別（`path`）を出し、status 欄に `1920×1080 30fps 4.2Mbps H264 (bandwidth) [NAT]` のようにそのまま表示する。同時に `limit`（`qualityLimitationReason`）を PeerJS の DataConnection（MAIN が `join:` を送るのに使っているのと同じ接続）で MAIN に送る。`qualityLimitationReason` は Chrome の送信側にしか無い統計なので、受信側の MAIN 単独では取れない。
+  - MAIN: 受信側 `inbound-rtp` + selected candidate pair から解像度・fps・ビットレート・`path` を出し、CAM から届いた `limit` と合わせてカメラ設定パネル（🎥 カメラ、操作員用。全画面にすると自動で閉じるので客席には映らない）に表示する。値が変わったときだけ 5 秒間隔目安で `camera_quality` に書く。
+  - HOST: `camera_quality` を購読し、既存の音マスターバーの下に「CAM: 1080p 4.2Mbps H264」のように表示。`limit` が `bandwidth` / `cpu` のときは赤くする。`path` が `nat`（NAT 越え）のときは末尾に `[NAT]` を付け、`chrome://webrtc-internals` を開かなくてもエンコーダ制限か経路の問題かを切り分けられるようにする。
 
 ## 7. 素材（Firebase Storage）
 

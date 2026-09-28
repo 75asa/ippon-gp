@@ -136,7 +136,7 @@ let roomId = null;
 let currentCodec = ''; // 実際に送っているコーデック（H264 / VP8 など）。当日の切り分け用に表示する
 const codecWatchers = new Set(); // 送信コーデックを確認中の監視（止める関数）
 
-// 配信品質（#63）。2 秒ごとに送信側 outbound-rtp を見て status 欄にそのまま出す。
+// 配信品質（#63）。2 秒ごとに送信側 outbound-rtp + selected ICE candidate pair を見て status 欄にそのまま出す。
 // qualityLimitationReason は送信側でしか取れないので、MAIN の HOST 用表示のために viewerConns 経由で送る
 let latestQuality = null;
 const qualityWatchers = new Set();
