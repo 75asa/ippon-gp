@@ -199,12 +199,13 @@ h1 { color: #f5c400; font-size: 14px; letter-spacing: 2px; margin-bottom: 6px; }
 
 
 <script type="module">
-import { initializeApp, getDatabase, ref, set, remove, onValue, get } from '../src/shared/firebase.js';
+import { initializeApp, getDatabase, ref, set, remove, update, onValue, get } from '../src/shared/firebase.js';
 import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue, voteStep } from '../src/shared/ippon.js';
 import { PLAYERS_PATH, PLAYER_COUNT, playerAt, scoreIndex, playersFromValue, escapeHtml } from '../src/shared/players.js';
 import { CLIENTS_MAIN_PATH, mainStatusPhase } from '../src/shared/mainStatus.js';
 import { ODAI_COUNT_PATH, DEFAULT_ODAI_COUNT, MAX_ODAI_COUNT, odaiCountFromValue } from '../src/shared/odai.js';
 import { formatQualityRecord, isQualityStale } from '../src/shared/webrtc-stats.js';
+import { modeUpdates } from '../src/shared/mode.js';
 
 const STORAGE_BASE = window.IPPON_CONFIG.storageBase;
 
@@ -502,46 +503,33 @@ onValue(ref(db, 'mode'), (snap) => {
 });
 
 // ボタン関数
+// #22: 遷移ごとに影響する全キーを web/src/shared/mode.js の modeUpdates() で1つのパッチにまとめ、
+// update() で1回のアトミック書き込みにする。以前は remove(agenda) → set(mode,...) を別々に送っていたため、
+// HOST自身の agenda リスナー（下の onValue(ref(db,'agenda'))）が「MAINでの動画終了」と誤認して
+// 途中の mode（previousMode）を書き戻し、新しい mode を巻き戻すことがあった。
+// applyMode() は「これから自分で agenda を消す」ことを事前にマークし（agendaIsSet が真のときだけ）、
+// 直後に agenda リスナーが呼ばれてもその1回は mode の巻き戻しをしないようにする。
+function applyMode(action, payload) {
+  const patch = modeUpdates(action, payload);
+  if (patch.agenda === null && agendaIsSet) manualStop = true;
+  return update(ref(db), patch);
+}
+
 window.showTaiki = () => {
-  remove(ref(db, 'agenda'));
-  remove(ref(db, 'answer_text'));
-  remove(ref(db, 'votes'));
-  remove(ref(db, 'revealed'));
-  set(ref(db, 'taiki'), true);
-  remove(ref(db, 'odai'));
-  set(ref(db, 'mode'), 'taiki');
+  applyMode('taiki');
   prevVoteCount = 0;
 };
 window.hideOdai = () => {
-  set(ref(db, 'keep_audio'), true);
-  remove(ref(db, 'agenda'));
-  remove(ref(db, 'answer_text'));
-  remove(ref(db, 'odai'));
-  remove(ref(db, 'taiki'));
-  remove(ref(db, 'votes'));
-  remove(ref(db, 'revealed'));
-  set(ref(db, 'mode'), 'saiten');
+  applyMode('saiten'); // keep_audio も同じパッチに含めて agenda:null と同時に書く
   prevVoteCount = 0;
   setTimeout(() => remove(ref(db, 'keep_audio')), 2000);
 };
 window.showScoreboard = () => {
-  remove(ref(db, 'agenda'));
-  remove(ref(db, 'answer_text'));
-  remove(ref(db, 'odai'));
-  remove(ref(db, 'taiki'));
-  remove(ref(db, 'votes'));
-  remove(ref(db, 'revealed'));
-  set(ref(db, 'mode'), 'scoreboard');
+  applyMode('scoreboard');
 };
 
 window.showOdai = (n) => {
-  remove(ref(db, 'agenda'));
-  remove(ref(db, 'answer_text'));
-  remove(ref(db, 'taiki'));
-  set(ref(db, 'odai'), n);
-  remove(ref(db, 'votes'));
-  set(ref(db, 'revealed'), false);
-  set(ref(db, 'mode'), 'odai');
+  applyMode('odai', { n });
   prevVoteCount = 0;
 };
 window.reveal = () => {
@@ -551,8 +539,7 @@ window.reveal = () => {
   noIpponAudio.play().catch(() => {});
 };
 window.resetVotes = () => {
-  remove(ref(db, 'votes'));
-  set(ref(db, 'revealed'), false);
+  applyMode('resetVotes');
   prevVoteCount = 0;
 };
 
@@ -799,6 +786,10 @@ window.playAgendaAudio = (key) => {
 
 let currentAgendaKey = null;
 let manualStop = false;
+// 直前の agenda 値が真だったか。MAIN側の動画終了（自動）とHOST自身の遷移による削除を、
+// 「agenda が真 → 偽になった」という変化そのものでしか判定できないため追跡する（#22）。
+// これが無いと、ページ読み込み直後（agenda が最初から null）にも誤って mode を書き戻してしまう。
+let agendaIsSet = false;
 
 let previousMode = 'taiki';
 
@@ -813,16 +804,24 @@ window.showAgenda = (key) => {
 };
 
 onValue(ref(db, 'agenda'), (snapshot) => {
-  if (!snapshot.val() && !manualStop) {
-    // MAINからの自動終了通知 → previousModeに戻す
+  const val = snapshot.val();
+  if (!val && agendaIsSet) {
+    // agenda が真 → 偽になった（このタブの起動時に最初から null だったのでは無い）。
+    // ボタン表示のリセットは、原因が何であれ常に行ってよい見た目だけの後片付け。
     currentAgendaKey = null;
-    set(ref(db, 'mode'), previousMode);
     ['op_comment','op_movie'].forEach(k => {
       const btn = document.getElementById('agenda-btn-' + k);
       if (btn) btn.textContent = '▶ ' + (k === 'op_comment' ? 'OP COMMENT' : 'OP MOVIE');
     });
+    if (!manualStop) {
+      // manualStop が立っていない = HOST自身の遷移（applyMode）でも
+      // toggleAgendaVideoの明示停止でもない → MAIN側の自動終了通知（動画終了など）。
+      // previousModeに戻す
+      set(ref(db, 'mode'), previousMode);
+    }
   }
   manualStop = false;
+  agendaIsSet = !!val;
 });
 
 window.toggleAgendaVideo = (key) => {
