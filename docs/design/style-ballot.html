@@ -1,0 +1,531 @@
+<title>SONG OGIRI スタイル投票</title>
+<!--
+  #74 デザインスタイル選定の A/B 投票ページ（claude.ai Artifact のソース）。
+  同じ画面構造（template）に、候補ごとの CSS（.sty-a / .sty-b / .sty-c / .sty-e）だけを当てている。
+  投票は Artifact の db capability（votes/<viewer id>）に保存。ローカルで開いた場合はモックの閲覧のみ。
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Archivo:wdth,wght@62..125,700..900&family=Bebas+Neue&family=Dela+Gothic+One&family=M+PLUS+1p:wght@800&family=M+PLUS+Rounded+1c:wght@800&family=Noto+Sans+JP:wght@700;900&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+/* ---------- page chrome ---------- */
+:root {
+  --bg: #f6f4fa;
+  --surface: #ffffff;
+  --ink: #1b1726;
+  --muted: #6d6780;
+  --line: #e2ddeb;
+  --accent: #9b1fe8;
+  --accent-ink: #ffffff;
+  --bar: #d9c8f2;
+  --focus: #9b1fe8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121016; --surface: #1b1822; --ink: #eeeaf5; --muted: #a39db3;
+    --line: #2d2838; --accent: #c77dff; --accent-ink: #1b1726; --bar: #4a3566; --focus: #c77dff;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121016; --surface: #1b1822; --ink: #eeeaf5; --muted: #a39db3;
+  --line: #2d2838; --accent: #c77dff; --accent-ink: #1b1726; --bar: #4a3566; --focus: #c77dff;
+}
+body { background: var(--bg); color: var(--ink); font-family: 'Zen Kaku Gothic New', 'Hiragino Sans', 'Yu Gothic', sans-serif; font-size: 15px; line-height: 1.7; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 80px; display: flex; flex-direction: column; gap: 56px; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.25; }
+.eyebrow { font-family: 'Bebas Neue', sans-serif; font-size: 17px; letter-spacing: .14em; color: var(--muted); }
+h1 { font-size: clamp(28px, 4.4vw, 44px); font-weight: 900; margin-top: 4px; }
+.lead { color: var(--muted); max-width: 62ch; margin-top: 10px; }
+h2 { font-size: 22px; font-weight: 900; }
+.sec-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; margin-bottom: 18px; }
+.sec-head p { color: var(--muted); font-size: 14px; }
+button, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* tally */
+.tally { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 28px; }
+.rows { display: flex; flex-direction: column; gap: 12px; }
+.row { display: grid; grid-template-columns: 11em minmax(0, 1fr) 3.2em; align-items: center; gap: 12px; font-size: 14px; }
+.row .name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .name .you { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 900; padding: 0 7px; border-radius: 99px; background: var(--accent); color: var(--accent-ink); vertical-align: 1px; }
+.track { height: 12px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.fill { height: 100%; border-radius: 99px; background: var(--accent); width: 0; transition: width .4s ease; }
+.row .n { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.tally-foot { margin-top: 14px; font-size: 13px; color: var(--muted); }
+.side { display: flex; flex-direction: column; gap: 10px; }
+.side label { font-size: 13px; font-weight: 700; }
+.side textarea { width: 100%; min-height: 84px; resize: vertical; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--bg); }
+.status { font-size: 13px; color: var(--muted); min-height: 1.7em; }
+.notes { font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto; }
+.notes li { list-style: none; border-left: 3px solid var(--bar); padding-left: 10px; }
+.notes b { color: var(--ink); }
+
+/* controls */
+.controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; margin-bottom: 18px; }
+.controls label { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.controls select { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; background: var(--surface); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 99px; padding: 3px; background: var(--surface); }
+.seg button { border: 0; background: none; padding: 5px 14px; border-radius: 99px; font-size: 13px; font-weight: 700; cursor: pointer; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+.ab { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.ab-col { display: flex; flex-direction: column; gap: 12px; }
+.ab-col.is-judge .scr { width: min(100%, 300px); margin-inline: auto; }
+.col-head { display: flex; align-items: center; gap: 10px; }
+.tag { font-family: 'Bebas Neue', sans-serif; font-size: 20px; letter-spacing: .06em; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--ink); color: var(--bg); padding-top: 2px; }
+.col-head b { font-size: 16px; }
+.vote-btn { border: 0; border-radius: 10px; padding: 10px 16px; font-weight: 900; background: var(--accent); color: var(--accent-ink); cursor: pointer; }
+.vote-btn[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.vote-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* gallery */
+.cands { display: flex; flex-direction: column; gap: 48px; }
+.cand { display: flex; flex-direction: column; gap: 16px; }
+.cand-head { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.cand-head h3 { font-size: 20px; font-weight: 900; }
+.cand-head p { color: var(--muted); font-size: 14px; flex-basis: 100%; }
+.set { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .56fr); gap: 14px; align-items: start; }
+.set .s-main { grid-column: 1; grid-row: 1; }
+.set .s-launcher { grid-column: 1; grid-row: 2; }
+.set .s-judge { grid-column: 2; grid-row: 1 / span 2; }
+.cap { font-family: 'Bebas Neue', sans-serif; font-size: 14px; letter-spacing: .12em; color: var(--muted); margin-bottom: 4px; }
+.pc { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; font-size: 14px; }
+.pc div { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; }
+.pc h4 { font-size: 13px; margin-bottom: 4px; }
+.pc ul { padding-left: 1.2em; color: var(--muted); }
+.dropped { font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 20px; }
+.dropped b { color: var(--ink); }
+
+@media (max-width: 760px) {
+  .tally, .ab, .pc { grid-template-columns: 1fr; }
+  .row { grid-template-columns: 8.5em minmax(0, 1fr) 2.6em; }
+  .set { grid-template-columns: 1fr; }
+  .set .s-main, .set .s-launcher, .set .s-judge { grid-column: 1; grid-row: auto; }
+  .set .s-judge .scr { width: min(100%, 260px); }
+}
+@media (prefers-reduced-motion: reduce) { .fill { transition: none; } }
+
+/* ---------- mock screens (shared structure, sized in cqw) ---------- */
+.scr { position: relative; container-type: inline-size; overflow: hidden; border-radius: 10px; box-shadow: 0 1px 0 var(--line), 0 8px 24px rgba(20, 10, 40, .12); }
+.scr.launcher { aspect-ratio: 16 / 10; }
+.scr.main { aspect-ratio: 16 / 9; }
+.scr.judge { aspect-ratio: 9 / 19; border-radius: 22px; }
+.scr .in { position: absolute; inset: 0; }
+.scr p, .scr b, .scr small, .scr i { margin: 0; }
+.scr i { font-style: normal; }
+
+.launcher .in { display: flex; flex-direction: column; justify-content: center; gap: 2.4cqw; padding: 0 7cqw; }
+.l-head { display: flex; align-items: center; gap: 1.8cqw; }
+.logo { font-size: 3.6cqw; line-height: 1; white-space: nowrap; }
+.l-sub { font-size: 1cqw; letter-spacing: .3em; }
+.l-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.8cqw; }
+.l-card { aspect-ratio: 1; padding: 2cqw; display: flex; flex-direction: column; }
+.l-card small { font-size: .9cqw; letter-spacing: .3em; }
+.l-card b { font-size: 4.2cqw; line-height: 1.05; margin-top: .4cqw; }
+.l-card p { font-size: 1.1cqw; margin-top: .6cqw; line-height: 1.4; }
+.l-card i { margin-top: auto; font-size: 1.1cqw; padding: .4cqw 1.2cqw; border-radius: 99px; width: fit-content; }
+.l-movies { display: grid; grid-template-columns: 1fr 1fr; gap: 1.8cqw; }
+.l-movies span { padding: 1.1cqw; text-align: center; font-size: 1.2cqw; }
+
+.judge .in { display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 12cqw 8cqw 14cqw; text-align: center; }
+.j-logo { font-size: 3.6cqw; letter-spacing: .18em; }
+.j-seat small { display: block; font-size: 3.4cqw; letter-spacing: .3em; }
+.j-seat b { display: block; font-size: 22cqw; line-height: 1; }
+.j-btn { width: 74cqw; aspect-ratio: 1; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2cqw; }
+.j-btn b { font-size: 17cqw; line-height: 1; }
+.j-btn small { font-size: 3.8cqw; }
+.j-meter { display: flex; gap: 2cqw; width: 84cqw; }
+.j-meter i { flex: 1; height: 3cqw; }
+.j-count { font-size: 6cqw; font-variant-numeric: tabular-nums; }
+
+.main .m-cam { position: absolute; inset: 0; }
+.main .m-odai { position: absolute; left: 3cqw; top: 3cqw; right: 3cqw; display: flex; align-items: center; gap: 1.4cqw; font-size: 2.1cqw; }
+.main .m-odai small { font-size: 1.4cqw; }
+.main .m-ippon { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; font-size: 16cqw; line-height: 1; }
+.main .m-meter { position: absolute; left: 30cqw; right: 30cqw; bottom: 4cqw; display: flex; gap: 1cqw; }
+.main .m-meter i { flex: 1; height: 1.6cqw; }
+.main .m-player { position: absolute; left: 3cqw; bottom: 3.4cqw; font-size: 1.6cqw; }
+
+/* ===== A: 放送・バラエティ番組グラフィック ===== */
+.sty-a { --y: #ffd60a; --r: #e4002b; --b: #0a3dff; --k: #101010; --g: #00b26b; }
+.sty-a .scr { font-family: 'M PLUS 1p', sans-serif; font-weight: 800; color: var(--k); }
+.sty-a .burst, .sty-a .launcher .in, .sty-a .judge .in { background: repeating-conic-gradient(from 0deg at 50% 115%, #2a61ff 0 5deg, var(--b) 5deg 10deg); }
+.sty-a .logo, .sty-a .j-seat b, .sty-a .j-btn b, .sty-a .m-ippon, .sty-a .l-card b, .sty-a .j-count { font-family: 'Dela Gothic One', sans-serif; font-weight: 400; }
+.sty-a .logo { color: #fff; -webkit-text-stroke: .55cqw var(--k); paint-order: stroke fill; text-shadow: .35cqw .45cqw 0 var(--k); }
+.sty-a .logo .w2 { color: var(--y); }
+.sty-a .l-sub { color: #fff; background: var(--r); padding: .35cqw .9cqw; border: .2cqw solid var(--k); transform: rotate(-3deg); }
+.sty-a .l-card { background: #fff; border: .35cqw solid var(--k); border-radius: 1.2cqw; box-shadow: 0 .7cqw 0 var(--k); }
+.sty-a .l-card small { color: #fff; padding: .2cqw .8cqw; width: fit-content; letter-spacing: .15em; }
+.sty-a .c-main small { background: var(--r); } .sty-a .c-host small { background: #ff8a00; } .sty-a .c-judge small { background: var(--b); } .sty-a .c-cam small { background: var(--g); }
+.sty-a .l-card i { background: var(--k); color: var(--y); }
+.sty-a .l-movies span { background: var(--y); border: .3cqw solid var(--k); border-radius: 99px; font-family: 'Dela Gothic One', sans-serif; box-shadow: 0 .5cqw 0 var(--k); }
+.sty-a .j-logo { color: #fff; background: var(--r); padding: 1cqw 3cqw; border: .8cqw solid var(--k); }
+.sty-a .j-seat small { color: #fff; }
+.sty-a .j-seat b { color: var(--y); -webkit-text-stroke: 2.2cqw var(--k); paint-order: stroke fill; }
+.sty-a .j-btn { background: var(--r); border: 2.2cqw solid #fff; box-shadow: 0 0 0 1.4cqw var(--k), 0 3cqw 0 1.4cqw var(--k); color: #fff; }
+.sty-a .j-btn b { -webkit-text-stroke: 1.6cqw var(--k); paint-order: stroke fill; }
+.sty-a .j-meter i { background: rgba(255,255,255,.3); border: .8cqw solid var(--k); border-radius: 2cqw; height: 4cqw; }
+.sty-a .j-meter i.on { background: var(--y); }
+.sty-a .j-count { color: #fff; -webkit-text-stroke: 1.2cqw var(--k); paint-order: stroke fill; }
+.sty-a .main .m-cam { background: repeating-conic-gradient(from 0deg at 50% 50%, #ffd60a 0 7deg, #ffb700 7deg 14deg); }
+.sty-a .m-odai { background: #fff; border: .3cqw solid var(--k); padding: .6cqw 1.2cqw; box-shadow: 0 .5cqw 0 var(--k); }
+.sty-a .m-odai small { background: var(--b); color: #fff; padding: .2cqw .8cqw; }
+.sty-a .m-ippon { color: #fff; -webkit-text-stroke: 1.3cqw var(--r); paint-order: stroke fill; text-shadow: 0 0 0 transparent, .8cqw 1cqw 0 var(--k); transform: translateY(-50%) rotate(-6deg); }
+.sty-a .m-meter i { background: var(--r); border: .25cqw solid var(--k); border-radius: .4cqw; }
+.sty-a .m-player { background: var(--k); color: var(--y); padding: .3cqw 1cqw; }
+
+/* ===== B: Neo-brutalism ===== */
+.sty-b { --bg: #ede4ff; --k: #111; --m: #ff3ea5; --l: #c6ff3d; --o: #ff8a00; --c: #3de0ff; }
+.sty-b .scr { font-family: 'M PLUS Rounded 1c', sans-serif; font-weight: 800; color: var(--k); }
+.sty-b .launcher .in, .sty-b .main .in { background: var(--bg) radial-gradient(circle, rgba(17,17,17,.14) .12cqw, transparent .14cqw) 0 0 / 2cqw 2cqw; }
+.sty-b .logo, .sty-b .l-card b, .sty-b .j-seat b, .sty-b .j-btn b, .sty-b .m-ippon, .sty-b .j-count { font-family: 'Archivo Black', sans-serif; }
+.sty-b .logo .w2 { background: var(--m); color: #fff; padding: 0 .6cqw; border: .25cqw solid var(--k); box-shadow: .4cqw .4cqw 0 var(--k); }
+.sty-b .l-sub { background: #fff; border: .18cqw solid var(--k); padding: .3cqw .8cqw; }
+.sty-b .l-card { border: .3cqw solid var(--k); border-radius: .9cqw; box-shadow: .7cqw .7cqw 0 var(--k); }
+.sty-b .c-main { background: var(--m); } .sty-b .c-host { background: var(--o); } .sty-b .c-judge { background: #fff; } .sty-b .c-cam { background: var(--c); }
+.sty-b .l-card i { background: #fff; border: .2cqw solid var(--k); }
+.sty-b .l-movies span { background: var(--k); color: var(--l); border-radius: .9cqw; box-shadow: .5cqw .5cqw 0 var(--m); }
+.sty-b .judge .in { background: var(--l); }
+.sty-b .j-logo { background: #fff; border: .8cqw solid var(--k); padding: 1cqw 3cqw; box-shadow: 1.2cqw 1.2cqw 0 var(--k); }
+.sty-b .j-seat b { font-size: 24cqw; }
+.sty-b .j-btn { border-radius: 9cqw; background: var(--m); color: #fff; border: 1.4cqw solid var(--k); box-shadow: 3.2cqw 3.2cqw 0 var(--k); }
+.sty-b .j-btn b { font-size: 15cqw; }
+.sty-b .j-meter i { background: #fff; border: .8cqw solid var(--k); height: 5cqw; }
+.sty-b .j-meter i.on { background: var(--m); }
+.sty-b .main .m-cam { inset: 9cqw 6cqw 8cqw; border: .4cqw solid var(--k); border-radius: 1cqw; background: radial-gradient(circle at 50% 120%, #4b3a73 0 33%, transparent 34%), radial-gradient(circle at 50% 46%, #4b3a73 0 11%, transparent 12%), #2b2140; box-shadow: .8cqw .8cqw 0 var(--k); }
+.sty-b .m-odai { right: auto; background: #fff; border: .3cqw solid var(--k); padding: .6cqw 1.2cqw; box-shadow: .5cqw .5cqw 0 var(--k); transform: rotate(-1deg); }
+.sty-b .m-odai small { background: var(--c); border: .2cqw solid var(--k); padding: 0 .6cqw; }
+.sty-b .m-ippon { left: 50%; right: auto; width: fit-content; transform: translate(-50%, -50%) rotate(-4deg); font-size: 13cqw; background: var(--l); border: .5cqw solid var(--k); box-shadow: 1.2cqw 1.2cqw 0 var(--k); padding: .8cqw 3cqw 0; }
+.sty-b .m-meter { bottom: 2.4cqw; }
+.sty-b .m-meter i { background: var(--m); border: .25cqw solid var(--k); height: 2cqw; }
+.sty-b .m-player { bottom: 2.4cqw; background: #fff; border: .2cqw solid var(--k); padding: .2cqw .8cqw; }
+
+/* ===== C: Dark neon / ステージ照明（現行路線） ===== */
+.sty-c { --bg: #12001f; --m: #cc00ff; --soft: #ddb8ff; --o: #ff9500; --t: #00ddaa; }
+.sty-c .scr { font-family: 'Zen Kaku Gothic New', sans-serif; font-weight: 700; color: #fff; }
+.sty-c .in { background: radial-gradient(ellipse 70% 60% at 50% 40%, rgba(204,0,255,.26), transparent 70%), var(--bg); }
+.sty-c .logo, .sty-c .l-card b, .sty-c .j-seat b, .sty-c .j-btn b, .sty-c .m-ippon, .sty-c .j-count, .sty-c .l-movies span { font-family: 'Bebas Neue', sans-serif; font-weight: 400; letter-spacing: .06em; }
+.sty-c .logo .w2 { color: var(--m); text-shadow: 0 0 1.2cqw rgba(204,0,255,.8); }
+.sty-c .l-sub { color: var(--soft); opacity: .7; }
+.sty-c .l-card { border-radius: 1.4cqw; border: .14cqw solid currentColor; background: rgba(255,255,255,.03); }
+.sty-c .l-card small, .sty-c .l-card p { color: rgba(255,255,255,.7); }
+.sty-c .c-main { color: var(--m); box-shadow: 0 0 2cqw rgba(204,0,255,.35), inset 0 0 2cqw rgba(204,0,255,.2); }
+.sty-c .c-host { color: var(--o); box-shadow: 0 0 2cqw rgba(255,149,0,.25); }
+.sty-c .c-judge { color: var(--soft); box-shadow: 0 0 2cqw rgba(221,184,255,.2); }
+.sty-c .c-cam { color: var(--t); box-shadow: 0 0 2cqw rgba(0,221,170,.25); }
+.sty-c .l-card b { text-shadow: 0 0 1.2cqw currentColor; }
+.sty-c .l-card i { border: .12cqw solid currentColor; }
+.sty-c .l-movies span { font-size: 1.6cqw; border: .12cqw solid var(--m); border-radius: 1cqw; color: var(--m); background: rgba(26,0,51,.8); }
+.sty-c .j-logo { color: var(--soft); }
+.sty-c .j-seat small { color: rgba(255,255,255,.6); }
+.sty-c .j-btn { border: 1.2cqw solid var(--m); box-shadow: 0 0 6cqw rgba(204,0,255,.7), inset 0 0 6cqw rgba(204,0,255,.5); background: rgba(204,0,255,.12); }
+.sty-c .j-btn b { text-shadow: 0 0 3cqw var(--m); }
+.sty-c .j-meter i { background: rgba(221,184,255,.18); border-radius: 1cqw; }
+.sty-c .j-meter i.on { background: var(--m); box-shadow: 0 0 3cqw var(--m); }
+.sty-c .main .m-cam { background: radial-gradient(circle at 50% 118%, rgba(0,221,170,.2) 0 32%, transparent 33%), radial-gradient(circle at 50% 50%, rgba(0,221,170,.16) 0 11%, transparent 12%), repeating-conic-gradient(from 0deg at 50% 45%, rgba(204,0,255,.18) 0 5deg, transparent 5deg 15deg); }
+.sty-c .m-odai { border-bottom: .12cqw solid rgba(221,184,255,.4); padding-bottom: .8cqw; }
+.sty-c .m-odai small { color: var(--soft); }
+.sty-c .m-ippon { text-shadow: 0 0 2cqw var(--m), 0 0 6cqw var(--m); transform: translateY(-50%) rotate(-4deg); letter-spacing: .08em; }
+.sty-c .m-meter i { background: var(--m); border-radius: .4cqw; box-shadow: 0 0 1.4cqw var(--m); }
+.sty-c .m-player { color: var(--soft); }
+
+/* ===== E: Editorial / Swiss ===== */
+.sty-e { --p: #f3f2ee; --k: #0e0e0e; --r: #ff2e1f; --g: #bdbcb6; }
+.sty-e .scr { font-family: 'Noto Sans JP', sans-serif; font-weight: 700; color: var(--k); }
+.sty-e .logo, .sty-e .l-card b, .sty-e .j-seat b, .sty-e .j-btn b, .sty-e .m-ippon, .sty-e .j-count, .sty-e .l-sub, .sty-e .l-card small, .sty-e .j-logo { font-family: 'Archivo', sans-serif; font-stretch: 70%; font-weight: 900; text-transform: uppercase; }
+.sty-e .launcher .in { background: var(--p) linear-gradient(90deg, rgba(14,14,14,.07) .08cqw, transparent .08cqw) 7cqw 0 / calc(86cqw / 12) 100%; align-items: stretch; }
+.sty-e .l-head { justify-content: space-between; border-bottom: .3cqw solid var(--k); padding-bottom: 1.2cqw; }
+.sty-e .logo { font-size: 5.2cqw; letter-spacing: -.01em; }
+.sty-e .logo .w2 { color: var(--r); }
+.sty-e .l-sub { font-size: 1.1cqw; letter-spacing: .1em; font-stretch: 100%; }
+.sty-e .l-card { aspect-ratio: auto; min-height: 20cqw; padding: 1.2cqw 0 0; border-top: .6cqw solid var(--k); }
+.sty-e .c-main { border-top-color: var(--r); }
+.sty-e .l-card small { font-stretch: 100%; letter-spacing: .12em; color: #6b6a64; }
+.sty-e .l-card b { font-size: 6cqw; letter-spacing: -.01em; }
+.sty-e .c-main b { color: var(--r); }
+.sty-e .l-card i { padding: 0; border-bottom: .15cqw solid var(--k); border-radius: 0; }
+.sty-e .l-movies span { border: .15cqw solid var(--k); text-align: left; padding: 1cqw 1.4cqw; }
+.sty-e .judge .in { background: var(--p); align-items: stretch; text-align: left; padding-inline: 7cqw; }
+.sty-e .j-logo { font-size: 4.4cqw; letter-spacing: .02em; border-bottom: .8cqw solid var(--k); padding-bottom: 2cqw; }
+.sty-e .j-seat small { font-family: 'Archivo', sans-serif; font-stretch: 100%; letter-spacing: .12em; color: #6b6a64; }
+.sty-e .j-seat b { font-size: 46cqw; line-height: .82; letter-spacing: -.02em; }
+.sty-e .j-btn { width: auto; aspect-ratio: 1.3; border-radius: 0; background: var(--k); color: var(--p); align-items: flex-start; justify-content: flex-end; padding: 5cqw; }
+.sty-e .j-btn b { font-size: 22cqw; color: var(--r); }
+.sty-e .j-meter { width: auto; gap: 1.4cqw; }
+.sty-e .j-meter i { background: var(--g); height: 2cqw; }
+.sty-e .j-meter i.on { background: var(--k); }
+.sty-e .j-count { font-size: 9cqw; }
+.sty-e .main .in { background: var(--k); color: var(--p); }
+.sty-e .main .m-cam { left: auto; width: 46cqw; background: radial-gradient(circle at 50% 118%, #3a3a38 0 34%, transparent 35%), radial-gradient(circle at 50% 50%, #3a3a38 0 12%, transparent 13%), #1c1c1b; }
+.sty-e .m-odai { right: 50cqw; flex-direction: column; align-items: flex-start; gap: .6cqw; font-size: 2.4cqw; line-height: 1.4; }
+.sty-e .m-odai small { font-family: 'Archivo', sans-serif; color: var(--r); letter-spacing: .12em; }
+.sty-e .m-ippon { left: 3cqw; right: auto; top: auto; bottom: 7cqw; transform: none; text-align: left; font-size: 21cqw; line-height: .8; letter-spacing: -.02em; }
+.sty-e .m-meter { left: 3.4cqw; right: 50cqw; bottom: 3.6cqw; gap: .6cqw; }
+.sty-e .m-meter i { background: var(--r); height: 1.2cqw; }
+.sty-e .m-player { left: auto; right: 3cqw; bottom: 3.4cqw; color: var(--p); font-size: 1.4cqw; }
+</style>
+
+<template id="t-launcher">
+  <div class="in">
+    <div class="l-head"><div class="logo"><span class="w1">SONG</span> <span class="w2">OGIRI</span> <span class="w3">GRAND PRIX</span></div><div class="l-sub">ADMIN PANEL</div></div>
+    <div class="l-cards">
+      <div class="l-card c-main"><small>DISPLAY</small><b>MAIN</b><p>大画面・プロジェクター用</p><i>OPEN →</i></div>
+      <div class="l-card c-host"><small>CONTROL</small><b>HOST</b><p>司会・進行操作 PCで開く</p><i>QR / OPEN →</i></div>
+      <div class="l-card c-judge"><small>VOTING</small><b>JUDGE</b><p>審査員10名 スマホで読み取り</p><i>QR / OPEN →</i></div>
+      <div class="l-card c-cam"><small>CAMERA</small><b>CAM</b><p>スマホカメラをMAINに配信</p><i>QR / OPEN →</i></div>
+    </div>
+    <div class="l-movies"><span>▶ OP COMMENT</span><span>▶ OP MOVIE</span></div>
+  </div>
+</template>
+<template id="t-judge">
+  <div class="in">
+    <div class="j-logo">SONG OGIRI GRAND PRIX</div>
+    <div class="j-seat"><small>SEAT</small><b>03</b></div>
+    <div class="j-btn"><b>IPPON</b><small>タップで投票</small></div>
+    <div class="j-meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div>
+    <div class="j-count">4 / 6</div>
+  </div>
+</template>
+<template id="t-main">
+  <div class="in">
+    <div class="m-cam"></div>
+    <div class="m-odai"><small>お題 3</small><p>こんな結婚式はイヤだ。どんな結婚式？</p></div>
+    <div class="m-ippon">IPPON</div>
+    <div class="m-meter"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="m-player">回答者 2</div>
+  </div>
+</template>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">ISSUE #74 · デザインスタイル選定</div>
+    <h1>SONG OGIRI スタイル投票</h1>
+    <p class="lead">同じ 3 画面（MAIN の IPPON 演出、ランチャー、審査員のスマホ）に 4 つのスタイルを当てたモックです。A/B で見比べて、本番で使いたいものに 1 票入れてください。何度でも入れ直せます（最後の票が有効）。</p>
+  </header>
+
+  <section aria-labelledby="h-tally">
+    <div class="sec-head"><h2 id="h-tally">いまの票</h2><p id="voters">投票はまだありません</p></div>
+    <div class="tally">
+      <div>
+        <div class="rows" id="rows"></div>
+        <p class="tally-foot">評価の目安: プロジェクターで遠くから読めるか / スマホで一瞬で押せるか / 低スペック端末で重くないか / 別イベントに色だけ差し替えられるか</p>
+      </div>
+      <div class="side">
+        <label for="note">選んだ理由（任意・投票と一緒に保存）</label>
+        <textarea id="note" maxlength="280" placeholder="例: 会場が明るめなので C より A のほうが読めそう"></textarea>
+        <p class="status" id="status" role="status" aria-live="polite">投票の準備中…</p>
+        <ul class="notes" id="notes" aria-label="みんなの理由"></ul>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-ab">
+    <div class="sec-head"><h2 id="h-ab">A/B 比較</h2><p>2 つを選んで、同じ画面を並べて比べます</p></div>
+    <div class="controls">
+      <label for="sel-a">A <select id="sel-a"></select></label>
+      <label for="sel-b">B <select id="sel-b"></select></label>
+      <div class="seg" role="group" aria-label="比べる画面" id="seg">
+        <button type="button" data-screen="main" aria-pressed="true">MAIN</button>
+        <button type="button" data-screen="launcher" aria-pressed="false">ランチャー</button>
+        <button type="button" data-screen="judge" aria-pressed="false">JUDGE</button>
+      </div>
+    </div>
+    <div class="ab" id="ab"></div>
+  </section>
+
+  <section aria-labelledby="h-cands">
+    <div class="sec-head"><h2 id="h-cands">候補ごとの全画面</h2><p>長所と懸念は #74 の比較表から</p></div>
+    <div class="cands" id="cands"></div>
+    <p class="dropped" style="margin-top:40px"><b>今回モックにしなかった候補:</b> D. Liquid Glass（背景のぼかしが低スペックの Android で重く、プロジェクターでは透け感が潰れる）、F. Y2K / Chrome（操作画面の可読性が低い）。見たい場合は #74 にコメントしてください。</p>
+  </section>
+</div>
+
+<script>
+const CANDS = [
+  { id: 'a', tag: 'A', name: '放送・バラエティ番組', short: '放送バラエティ',
+    one: '太い縁取りの見出しとテロップ帯、集中線。番組パロディの企画にいちばん寄せた案。',
+    pros: ['企画の世界観と一致して盛り上がる', '縁取り文字は明るい会場でも遠くから読める'],
+    cons: ['本物の番組に寄せすぎない線引きが要る', '情報量の多い HOST 画面ではうるさくなりやすい'] },
+  { id: 'b', tag: 'B', name: 'Neo-brutalism', short: 'Neo-brutalism',
+    one: '太い黒枠とベタ塗りの原色、ずらした影。お笑い企画のノリを素朴な強さで出す案。',
+    pros: ['コントラストが高く、低スペックでも描画が軽い', 'ボタンが押せる形に見えるので審査員が迷わない'],
+    cons: ['演出の高級感は出しにくい', '雑に作ると安っぽく見える'] },
+  { id: 'c', tag: 'C', name: 'Dark neon / ステージ照明', short: 'Dark neon（現行）',
+    one: '暗い地にネオン発光とスポットライト。今の MAIN と README 画像の路線を整えた案。',
+    pros: ['暗い会場のプロジェクターで映える', '今の素材とトーンが近く、移行コストが低い'],
+    cons: ['明るい会場ではコントラストが落ちる', '発光の重ねすぎは低スペックで重い'] },
+  { id: 'e', tag: 'E', name: 'Editorial / Swiss', short: 'Editorial',
+    one: '大きな文字と明快なグリッド、差し色は赤 1 色。情報を整理して演出は文字の大きさで見せる案。',
+    pros: ['ランチャーや HOST の情報整理に強い', '色の差し替え（テーマ化）がいちばん簡単'],
+    cons: ['演出の盛り上がりは他案より控えめ', '縮小すると細部が弱く見える'] },
+];
+const SCREENS = { main: 'MAIN（IPPON 演出）', launcher: 'ランチャー', judge: 'JUDGE（審査員スマホ）' };
+const byId = Object.fromEntries(CANDS.map(c => [c.id, c]));
+
+function frame(styleId, screen) {
+  const box = document.createElement('div');
+  box.className = 'sty-' + styleId;
+  const scr = document.createElement('div');
+  scr.className = 'scr ' + screen;
+  scr.setAttribute('role', 'img');
+  scr.setAttribute('aria-label', byId[styleId].name + ' の ' + SCREENS[screen] + ' モック');
+  scr.appendChild(document.getElementById('t-' + screen).content.cloneNode(true));
+  box.appendChild(scr);
+  return box;
+}
+
+/* ---- voting state ---- */
+let db = null, uid = null, canWrite = false, myChoice = null, votes = {};
+const voteButtons = [];
+
+function voteButton(id) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'vote-btn'; b.dataset.choice = id; b.disabled = true;
+  b.addEventListener('click', () => castVote(id));
+  voteButtons.push(b);
+  syncButtons();
+  return b;
+}
+function syncButtons() {
+  for (const b of voteButtons) {
+    const mine = myChoice === b.dataset.choice;
+    b.disabled = !canWrite;
+    b.setAttribute('aria-pressed', String(mine));
+    b.textContent = mine ? byId[b.dataset.choice].tag + ' に投票済み' : byId[b.dataset.choice].tag + ' に投票する';
+  }
+}
+function setStatus(t) { document.getElementById('status').textContent = t; }
+
+function renderTally() {
+  const counts = Object.fromEntries(CANDS.map(c => [c.id, 0]));
+  const notes = [];
+  for (const [id, v] of Object.entries(votes)) {
+    if (v && counts[v.choice] !== undefined) counts[v.choice]++;
+    if (v && typeof v.note === 'string' && v.note.trim()) notes.push({ choice: v.choice, note: v.note.trim(), at: v.at || '' });
+  }
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const max = Math.max(1, ...Object.values(counts));
+  const rows = document.getElementById('rows');
+  rows.replaceChildren(...CANDS.map(c => {
+    const r = document.createElement('div'); r.className = 'row';
+    const n = document.createElement('div'); n.className = 'name'; n.textContent = c.tag + '. ' + c.short;
+    if (myChoice === c.id) { const y = document.createElement('span'); y.className = 'you'; y.textContent = 'あなた'; n.appendChild(y); }
+    const t = document.createElement('div'); t.className = 'track';
+    const f = document.createElement('div'); f.className = 'fill'; f.style.width = (counts[c.id] / max * 100) + '%';
+    t.appendChild(f);
+    const k = document.createElement('div'); k.className = 'n'; k.textContent = counts[c.id];
+    r.append(n, t, k); return r;
+  }));
+  document.getElementById('voters').textContent = total ? total + ' 人が投票' : '投票はまだありません';
+  notes.sort((a, b) => (b.at > a.at ? 1 : -1));
+  document.getElementById('notes').replaceChildren(...notes.slice(0, 30).map(x => {
+    const li = document.createElement('li');
+    const b = document.createElement('b'); b.textContent = (byId[x.choice]?.tag || '?') + ' ';
+    li.append(b, document.createTextNode(x.note)); return li;
+  }));
+}
+
+async function castVote(choice) {
+  if (!db || !uid || !canWrite) return;
+  const note = document.getElementById('note').value.trim().slice(0, 280);
+  canWrite = false; syncButtons(); setStatus('保存しています…');
+  try {
+    await db.doc('votes/' + uid).set({ choice, note, at: new Date().toISOString() });
+    myChoice = choice; canWrite = true;
+    setStatus(byId[choice].tag + '. ' + byId[choice].name + ' に投票しました。変えたいときは別の案を押してください。');
+  } catch (e) {
+    if (e && (e.code === 'invalid_argument' || e.code === 'not_granted' || e.code === 'revoked')) {
+      setStatus('この共有設定では投票できません。オーナーに「Contributor」以上で共有してもらってください。');
+    } else {
+      canWrite = true;
+      setStatus('保存できませんでした。少し待ってからもう一度押してください。');
+    }
+  }
+  syncButtons(); renderTally();
+}
+
+async function initVoting() {
+  const use = window.claude && typeof window.claude.use === 'function' ? n => window.claude.use(n) : null;
+  if (!use) { setStatus('投票は claude.ai でこのページを開いたときに使えます。ここではモックの閲覧のみです。'); return; }
+  const [dbNs, user] = await Promise.all([use('db'), use('user')]);
+  if (!dbNs) { setStatus('この表示では投票を読み込めませんでした。モックの閲覧はできます。'); return; }
+  db = dbNs;
+  uid = user ? await user.id() : null;
+  const can = user ? await user.can('data.write') : null;
+  db.collection('votes').onSnapshot(snap => {
+    votes = {};
+    for (const d of snap.docs) votes[d.id] = d.data();
+    if (uid && votes[uid]) myChoice = votes[uid].choice;
+    if (uid && votes[uid] && typeof votes[uid].note === 'string' && !document.getElementById('note').value) document.getElementById('note').value = votes[uid].note;
+    renderTally(); syncButtons();
+  }, () => setStatus('票の読み込みが止まりました。ページを開き直してください。'));
+  if (!uid) { setStatus('サインインしていないため投票できません。票の閲覧はできます。'); return; }
+  if (can === false) { setStatus('閲覧のみの権限です。投票するにはオーナーに「Contributor」以上で共有してもらってください。'); return; }
+  canWrite = true; syncButtons();
+  setStatus('A/B 比較か候補一覧のボタンから投票できます。');
+}
+
+/* ---- A/B ---- */
+let screen = 'main';
+function renderAB() {
+  const a = document.getElementById('sel-a').value, b = document.getElementById('sel-b').value;
+  const ab = document.getElementById('ab');
+  ab.replaceChildren(...[a, b].map(id => {
+    const col = document.createElement('div'); col.className = 'ab-col' + (screen === 'judge' ? ' is-judge' : '');
+    const head = document.createElement('div'); head.className = 'col-head';
+    const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = byId[id].tag;
+    const nm = document.createElement('b'); nm.textContent = byId[id].name;
+    head.append(tag, nm);
+    col.append(head, frame(id, screen), voteButton(id));
+    return col;
+  }));
+  pruneButtons();
+}
+function pruneButtons() { for (let i = voteButtons.length - 1; i >= 0; i--) if (!voteButtons[i].isConnected) voteButtons.splice(i, 1); syncButtons(); }
+
+function initAB() {
+  const sa = document.getElementById('sel-a'), sb = document.getElementById('sel-b');
+  for (const s of [sa, sb]) for (const c of CANDS) { const o = document.createElement('option'); o.value = c.id; o.textContent = c.tag + '. ' + c.short; s.appendChild(o); }
+  sa.value = 'c'; sb.value = 'a';
+  sa.addEventListener('change', renderAB); sb.addEventListener('change', renderAB);
+  document.getElementById('seg').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-screen]'); if (!btn) return;
+    screen = btn.dataset.screen;
+    for (const x of document.querySelectorAll('#seg button')) x.setAttribute('aria-pressed', String(x === btn));
+    renderAB();
+  });
+  renderAB();
+}
+
+/* ---- gallery ---- */
+function initGallery() {
+  document.getElementById('cands').replaceChildren(...CANDS.map(c => {
+    const s = document.createElement('article'); s.className = 'cand';
+    const h = document.createElement('div'); h.className = 'cand-head';
+    const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = c.tag;
+    const h3 = document.createElement('h3'); h3.textContent = c.name;
+    const p = document.createElement('p'); p.textContent = c.one;
+    h.append(tag, h3, voteButton(c.id), p);
+    const set = document.createElement('div'); set.className = 'set';
+    for (const scr of ['main', 'launcher', 'judge']) {
+      const cell = document.createElement('div'); cell.className = 's-' + scr;
+      const cap = document.createElement('div'); cap.className = 'cap'; cap.textContent = SCREENS[scr];
+      cell.append(cap, frame(c.id, scr)); set.appendChild(cell);
+    }
+    const pc = document.createElement('div'); pc.className = 'pc';
+    for (const [title, items] of [['長所', c.pros], ['懸念', c.cons]]) {
+      const d = document.createElement('div'); const h4 = document.createElement('h4'); h4.textContent = title;
+      const ul = document.createElement('ul'); for (const t of items) { const li = document.createElement('li'); li.textContent = t; ul.appendChild(li); }
+      d.append(h4, ul); pc.appendChild(d);
+    }
+    s.append(h, set, pc); return s;
+  }));
+}
+
+initGallery();
+initAB();
+renderTally();
+initVoting();
+</script>
