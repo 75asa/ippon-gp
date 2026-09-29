@@ -167,6 +167,25 @@
       "$other": { ".write": false, ".validate": false }
     },
 
+    "camera_quality": {
+      /* 配信品質の要約（#63）。MAIN が受信側の getStats() から低頻度（変化時、または前回の書き込みから
+         10 秒経った heartbeat のときだけ・5 秒間隔目安）で書く。ts はサーバー時刻（{'.sv':'timestamp'}）
+         で書くので、HOST は MAIN との時計のズレに関係なく古さ（配信切れ）を判定できる。
+         HOST がここを見て「CAM: 1080p 4.2Mbps」のように表示する。
+         削除は、MAIN の disconnectCamera() / 接続断（connectionstatechange）/ camera_room 消失 / onDisconnect
+         のいずれでも起きる。値を残さず消せるよう常に許可 */
+      ".write": true,
+      ".validate": "newData.hasChildren(['res', 'fps', 'kbps', 'codec', 'limit', 'path', 'ts'])",
+      "res":   { ".validate": "newData.isString() && newData.val().matches(/^[1-9][0-9]{0,4}x[1-9][0-9]{0,4}$/)" },
+      "fps":   { ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= 240" },
+      "kbps":  { ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 0 && newData.val() <= 100000" },
+      "codec": { ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,16}$/)" },
+      "limit": { ".validate": "newData.isString() && newData.val().matches(/^(none|bandwidth|cpu|other)$/)" },
+      "path":  { ".validate": "newData.isString() && newData.val().matches(/^(host|nat|unknown)$/)" },
+      "ts":    { ".validate": "newData.isNumber() && newData.val() > 0" },
+      "$other": { ".validate": false }
+    },
+
     /* 上記以外のトップレベルキーは一切書けない（ルートに .write が無いので既定で拒否だが、意図を明示） */
     "$other": {
       ".write": false,

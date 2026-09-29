@@ -146,6 +146,25 @@ const cases = [
   ['camera_room = オブジェクトは拒否', put('/camera_room', { id: 'x' }), DENY],
   ['camera_room の削除（CAM 停止）は許可', del('/camera_room'), ALLOW],
 
+  // camera_quality（配信品質の要約。MAIN が書く。#63）
+  ['camera_quality の正しい形は許可', put('/camera_quality', { res: '1920x1080', fps: 30, kbps: 4200, codec: 'H264', limit: 'none', path: 'host', ts: Date.now() }), ALLOW],
+  ['camera_quality limit=bandwidth も許可', put('/camera_quality', { res: '1280x720', fps: 24, kbps: 900, codec: 'VP8', limit: 'bandwidth', path: 'nat', ts: Date.now() }), ALLOW],
+  ['camera_quality path=unknown も許可', put('/camera_quality', { res: '1280x720', fps: 24, kbps: 900, codec: 'VP8', limit: 'none', path: 'unknown', ts: Date.now() }), ALLOW],
+  ['camera_quality フィールド欠け（ts 無し）は拒否', put('/camera_quality', { res: '1920x1080', fps: 30, kbps: 4200, codec: 'H264', limit: 'none', path: 'host' }), DENY],
+  ['camera_quality フィールド欠け（path 無し）は拒否', put('/camera_quality', { res: '1920x1080', fps: 30, kbps: 4200, codec: 'H264', limit: 'none', ts: 1 }), DENY],
+  ['camera_quality res の形が不正（x なし）だと拒否', put('/camera_quality', { res: '1920', fps: 30, kbps: 4200, codec: 'H264', limit: 'none', path: 'host', ts: 1 }), DENY],
+  ['camera_quality res が数値だと拒否', put('/camera_quality', { res: 0, fps: 30, kbps: 4200, codec: 'H264', limit: 'none', path: 'host', ts: 1 }), DENY],
+  ['camera_quality fps が範囲外（負数）だと拒否', put('/camera_quality', { res: '1920x1080', fps: -1, kbps: 4200, codec: 'H264', limit: 'none', path: 'host', ts: 1 }), DENY],
+  ['camera_quality fps が小数だと拒否', put('/camera_quality', { res: '1920x1080', fps: 29.5, kbps: 4200, codec: 'H264', limit: 'none', path: 'host', ts: 1 }), DENY],
+  ['camera_quality kbps が上限超えだと拒否', put('/camera_quality', { res: '1920x1080', fps: 30, kbps: 200000, codec: 'H264', limit: 'none', path: 'host', ts: 1 }), DENY],
+  ['camera_quality codec に記号があると拒否', put('/camera_quality', { res: '1920x1080', fps: 30, kbps: 4200, codec: 'H264;evil', limit: 'none', path: 'host', ts: 1 }), DENY],
+  ['camera_quality limit が未知の値だと拒否', put('/camera_quality', { res: '1920x1080', fps: 30, kbps: 4200, codec: 'H264', limit: 'evil', path: 'host', ts: 1 }), DENY],
+  ['camera_quality path が未知の値（relay 等）だと拒否', put('/camera_quality', { res: '1920x1080', fps: 30, kbps: 4200, codec: 'H264', limit: 'none', path: 'relay', ts: 1 }), DENY],
+  ['camera_quality に余計なフィールドがあると拒否', put('/camera_quality', { res: '1920x1080', fps: 30, kbps: 4200, codec: 'H264', limit: 'none', path: 'host', ts: 1, note: 'x' }), DENY],
+  ['camera_quality の個別フィールド更新も検証される（fps だけ不正）', put('/camera_quality/fps', -1), DENY],
+  ['camera_quality の個別フィールド更新も検証される（path だけ不正）', put('/camera_quality/path', 'relay'), DENY],
+  ['camera_quality の削除（カメラ停止）は許可', del('/camera_quality'), ALLOW],
+
   // settings/judges（設定画面）。ここに来た時点で votes は空
   ['settings/judges 8 席は許可', put('/settings/judges', judges(8)), ALLOW],
   ['settings/judges 5 席は下限未満で拒否', put('/settings/judges', judges(5)), DENY],
