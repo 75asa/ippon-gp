@@ -127,6 +127,27 @@ ol { list-style: none; display: flex; flex-direction: column; gap: 8px; }
     <p class="status" id="status" role="status" aria-live="polite"></p>
   </section>
 
+  <section class="card" aria-labelledby="h-odai">
+    <div class="card-head">
+      <h1 id="h-odai">ODAI <small>お題数</small></h1>
+      <span class="pill" id="o-state">読み込み中…</span>
+    </div>
+    <p class="help">HOST の「問1」〜「問N」ボタンと読み上げボタンの数、MAIN に表示できるお題番号の上限です。素材（お題画像・読み上げ音声）が 6 問分までなので、1〜6 の範囲で設定してください。いつでも変えられます。</p>
+    <div class="stepper">
+      <button class="icon" id="o-minus" type="button" aria-label="1 問減らす">−</button>
+      <input id="o-input" type="number" inputmode="numeric" min="1" max="6" step="1" aria-label="お題数">
+      <button class="icon" id="o-plus" type="button" aria-label="1 問増やす">＋</button>
+      <span class="unit" id="o-range">問（1〜6）</span>
+    </div>
+    <div class="errors" id="o-errors" role="alert"></div>
+    <div class="foot">
+      <button class="btn link" id="o-reset" type="button">初期値（6 問）に戻す</button>
+      <button class="btn ghost push" id="o-discard" type="button">変更を取り消す</button>
+      <button class="btn primary" id="o-save" type="button">保存する</button>
+    </div>
+    <p class="status" id="o-status" role="status" aria-live="polite"></p>
+  </section>
+
   <section class="card" aria-labelledby="h-ippon">
     <div class="card-head">
       <h1 id="h-ippon">IPPON <small>に必要な票数</small></h1>
@@ -154,6 +175,7 @@ ol { list-style: none; display: flex; flex-direction: column; gap: 8px; }
 import { initializeApp, getDatabase, ref, set, update, remove, onValue } from "../src/shared/firebase.js";
 import { JUDGES_PATH, MIN_SEATS, MAX_SEATS, NAME_MAX, KINDS, judgesFromValue, judgesToRecord, validateJudges } from "../src/shared/judges.js";
 import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue } from "../src/shared/ippon.js";
+import { ODAI_COUNT_PATH, DEFAULT_ODAI_COUNT, MIN_ODAI_COUNT, MAX_ODAI_COUNT, odaiCountFromValue } from "../src/shared/odai.js";
 import { SEATS_PATH } from "../src/shared/seats.js";
 import { PLAYERS_PATH, NAME_MAX as PLAYER_NAME_MAX, playersFromValue, playersToRecord, validatePlayers } from "../src/shared/players.js";
 
@@ -458,13 +480,94 @@ onValue(ref(db, PLAYERS_PATH), (snap) => {
   if (!wasDirty || playersSaving) { playersDraft = clonePlayers(playersRemote.players); renderPlayers(); }
   else { setPStatus('他の端末で回答者の設定が変わりました。「変更を取り消す」で最新を読み込めます。', 'error'); renderPlayersMeta(); }
 });
+
+/* ---- お題数 ---- */
+let odaiRemote = DEFAULT_ODAI_COUNT;
+let odaiIsDefault = true;
+let odaiDraft = DEFAULT_ODAI_COUNT;
+let odaiSaving = false;
+let odaiLoaded = false;
+let odaiResetArmedUntil = 0;
+
+function odaiErrors() {
+  const n = odaiDraft;
+  if (!Number.isInteger(n)) return ['お題数は整数で入力してください'];
+  if (n < MIN_ODAI_COUNT || n > MAX_ODAI_COUNT) return [`お題数は ${MIN_ODAI_COUNT}〜${MAX_ODAI_COUNT}（素材が 6 問分までのため）にしてください`];
+  return [];
+}
+
+function setOStatus(text, kind = '') {
+  const el = $('o-status');
+  el.textContent = text;
+  el.className = 'status' + (kind ? ' ' + kind : '');
+}
+
+function renderOdai() {
+  if (!odaiLoaded) return;
+  const input = $('o-input');
+  if (document.activeElement !== input) input.value = Number.isFinite(odaiDraft) ? odaiDraft : '';
+  input.disabled = odaiSaving;
+  const dirty = odaiDraft !== odaiRemote;
+  const pill = $('o-state');
+  if (odaiIsDefault && !dirty) { pill.textContent = '初期値（6 問）'; pill.className = 'pill'; }
+  else if (dirty) { pill.textContent = '未保存の変更あり'; pill.className = 'pill dirty'; }
+  else { pill.textContent = '保存済み'; pill.className = 'pill saved'; }
+  const errors = dirty ? odaiErrors() : [];
+  $('o-errors').replaceChildren(...errors.map(e => { const d = document.createElement('div'); d.textContent = e; return d; }));
+  $('o-minus').disabled = odaiSaving || !(odaiDraft > MIN_ODAI_COUNT);
+  $('o-plus').disabled = odaiSaving || !(odaiDraft < MAX_ODAI_COUNT);
+  $('o-save').disabled = odaiSaving || !dirty || errors.length > 0;
+  $('o-discard').disabled = odaiSaving || !dirty;
+  $('o-reset').disabled = odaiSaving || odaiIsDefault;
+  if (Date.now() > odaiResetArmedUntil) $('o-reset').textContent = '初期値（6 問）に戻す';
+}
+
+async function writeOdai(value) {
+  odaiSaving = true; renderOdai(); setOStatus('保存しています…');
+  try {
+    if (value === null) await remove(ref(db, ODAI_COUNT_PATH));
+    else await set(ref(db, ODAI_COUNT_PATH), value);
+    setOStatus(value === null ? '初期値（6 問）に戻しました。' : `保存しました。HOST に問1〜問${value} が表示されます。`, 'ok');
+  } catch (e) {
+    setOStatus(`保存できませんでした。通信状態を確認して、もう一度保存してください。（${e.code || e.message}）`, 'error');
+  } finally {
+    odaiSaving = false; renderOdai();
+  }
+}
+
+$('o-input').addEventListener('input', () => { odaiDraft = $('o-input').value === '' ? NaN : Number($('o-input').value); renderOdai(); });
+$('o-minus').addEventListener('click', () => { odaiDraft -= 1; renderOdai(); });
+$('o-plus').addEventListener('click', () => { odaiDraft += 1; renderOdai(); });
+$('o-save').addEventListener('click', () => { if (!odaiErrors().length) writeOdai(odaiDraft); });
+$('o-discard').addEventListener('click', () => { odaiDraft = odaiRemote; setOStatus(''); renderOdai(); });
+$('o-reset').addEventListener('click', () => {
+  // 誤操作防止のため 2 回押しで実行する
+  if (Date.now() > odaiResetArmedUntil) {
+    odaiResetArmedUntil = Date.now() + 4000;
+    $('o-reset').textContent = 'もう一度押すと初期値に戻します';
+    setTimeout(renderOdai, 4100);
+    return;
+  }
+  odaiResetArmedUntil = 0;
+  writeOdai(null);
+});
+
+onValue(ref(db, ODAI_COUNT_PATH), (snap) => {
+  const wasDirty = odaiLoaded && odaiDraft !== odaiRemote;
+  odaiIsDefault = snap.val() === null;
+  odaiRemote = odaiCountFromValue(snap.val());
+  odaiLoaded = true;
+  if (!wasDirty || odaiSaving) odaiDraft = odaiRemote;
+  else setOStatus('他の端末でお題数の設定が変わりました。「変更を取り消す」で最新を読み込めます。', 'error');
+  renderOdai();
+});
 $('t-input').addEventListener('input', () => { thresholdDraft = $('t-input').value === '' ? NaN : Number($('t-input').value); renderThreshold(); });
 $('t-minus').addEventListener('click', () => { thresholdDraft -= 1; renderThreshold(); });
 $('t-plus').addEventListener('click', () => { thresholdDraft += 1; renderThreshold(); });
 $('t-save').addEventListener('click', () => { if (!thresholdErrors().length) writeThreshold(thresholdDraft); });
 $('t-discard').addEventListener('click', () => { thresholdDraft = thresholdRemote; setTStatus(''); renderThreshold(); });
 $('t-reset').addEventListener('click', () => writeThreshold(null));
-window.addEventListener('beforeunload', (e) => { if (isDirty() || playersDirty() || (loaded.threshold && thresholdDraft !== thresholdRemote)) e.preventDefault(); });
+window.addEventListener('beforeunload', (e) => { if (isDirty() || playersDirty() || (loaded.threshold && thresholdDraft !== thresholdRemote) || (odaiLoaded && odaiDraft !== odaiRemote)) e.preventDefault(); });
 
 onValue(ref(db, JUDGES_PATH), (snap) => {
   const wasDirty = remote && isDirty();

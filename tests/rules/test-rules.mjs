@@ -250,6 +250,21 @@ const cases = [
   ['後片付け: votes を消す（回答者）', del('/votes'), ALLOW],
   ['settings/players を消せる（初期値に戻す）', del('/settings/players'), ALLOW],
 
+  // settings/odaiCount（お題数、#18）。odai はこの上限（無ければ 6）を超えられない
+  ['odai = 6 は許可（お題数の設定が無いので既定 6 まで）', put('/odai', 6), ALLOW],
+  ['odai の削除', del('/odai'), ALLOW],
+  ['odaiCount = 3 は許可', put('/settings/odaiCount', 3), ALLOW],
+  ['odai = 4 はお題数 3 を超えるので拒否', put('/odai', 4), DENY],
+  ['odai = 3 はお題数以内なので許可', put('/odai', 3), ALLOW],
+  ['odai の削除（続き）', del('/odai'), ALLOW],
+  ['odaiCount = 0 は拒否', put('/settings/odaiCount', 0), DENY],
+  ['odaiCount = 7 は拒否（素材は 6 問分まで）', put('/settings/odaiCount', 7), DENY],
+  ['odaiCount = 2.5 は整数でないので拒否', put('/settings/odaiCount', 2.5), DENY],
+  ['odaiCount = "3" は型違いで拒否', put('/settings/odaiCount', '3'), DENY],
+  ['後片付け: odaiCount を消す（初期値 6 に戻す）', del('/settings/odaiCount'), ALLOW],
+  ['odaiCount を消した後は odai = 6 が再び許可', put('/odai', 6), ALLOW],
+  ['後片付け: odai を消す', del('/odai'), ALLOW],
+
   // seats（座席ロック）。ここに来た時点で votes・settings は空
   ['seats/1 を端末 A が取れる', put('/seats/1', seat(DEV_A)), ALLOW],
   ['seats/1 を端末 B が上書きするのは拒否', put('/seats/1', seat(DEV_B)), DENY],
