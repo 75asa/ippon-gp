@@ -17,8 +17,9 @@
     },
 
     "odai": {
+      /* 上限は settings/odaiCount（お題数、#18）。無ければ 6（素材が 1..6 の 6 問分までのため） */
       ".write": true,
-      ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 1 && newData.val() <= 6"
+      ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 1 && newData.val() <= (root.child('settings/odaiCount').exists() ? root.child('settings/odaiCount').val() : 6)"
     },
 
     "votes": {
@@ -73,6 +74,12 @@
            削除（初期値 6 に戻す）は、審査員の定員が 6 以上（または初期値の 10 席）のときだけ */
         ".write": "!root.child('votes').exists() && (newData.exists() || !root.child('settings/judges').exists() || root.child('settings/judges').hasChild('6'))",
         ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 1 && newData.val() <= 10 && (newData.val() != 1 || !root.child('settings/judges').exists() || root.child('settings/judges').hasChild('1')) && (newData.val() != 2 || !root.child('settings/judges').exists() || root.child('settings/judges').hasChild('2')) && (newData.val() != 3 || !root.child('settings/judges').exists() || root.child('settings/judges').hasChild('3')) && (newData.val() != 4 || !root.child('settings/judges').exists() || root.child('settings/judges').hasChild('4')) && (newData.val() != 5 || !root.child('settings/judges').exists() || root.child('settings/judges').hasChild('5')) && (newData.val() != 6 || !root.child('settings/judges').exists() || root.child('settings/judges').hasChild('6')) && (newData.val() != 7 || !root.child('settings/judges').exists() || root.child('settings/judges').hasChild('7')) && (newData.val() != 8 || !root.child('settings/judges').exists() || root.child('settings/judges').hasChild('8')) && (newData.val() != 9 || !root.child('settings/judges').exists() || root.child('settings/judges').hasChild('9')) && (newData.val() != 10 || !root.child('settings/judges').exists() || root.child('settings/judges').hasChild('10'))"
+      },
+      "odaiCount": {
+        /* お題数（#18）。HOST の問1..N ボタン・読み上げボタンと MAIN の odai_1..N 表示の上限。
+           素材が 1..6 の 6 問分までなので 1〜6 の整数のみ。無ければ 6 */
+        ".write": true,
+        ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 1 && newData.val() <= 6"
       },
       "players": {
         /* 回答者の名前（キーは回答者番号 1..5 = portrait_playerN = scores[N-1]）。採点に影響しないので投票中でも変えられる */

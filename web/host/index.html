@@ -95,12 +95,12 @@ h1 { color: #f5c400; font-size: 14px; letter-spacing: 2px; margin-bottom: 6px; }
 
   <!-- 行2：問/公開/スコア表示 -->
   <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px;">
-    <button class="btn odai-btn" onclick="showOdai(1)">問1</button>
-    <button class="btn odai-btn" onclick="showOdai(2)">問2</button>
-    <button class="btn odai-btn" onclick="showOdai(3)">問3</button>
-    <button class="btn odai-btn" onclick="showOdai(4)">問4</button>
-    <button class="btn odai-btn" onclick="showOdai(5)">問5</button>
-    <button class="btn odai-btn" onclick="showOdai(6)">問6</button>
+    <button class="btn odai-btn" id="odai-btn-1" onclick="showOdai(1)">問1</button>
+    <button class="btn odai-btn" id="odai-btn-2" onclick="showOdai(2)">問2</button>
+    <button class="btn odai-btn" id="odai-btn-3" onclick="showOdai(3)">問3</button>
+    <button class="btn odai-btn" id="odai-btn-4" onclick="showOdai(4)">問4</button>
+    <button class="btn odai-btn" id="odai-btn-5" onclick="showOdai(5)">問5</button>
+    <button class="btn odai-btn" id="odai-btn-6" onclick="showOdai(6)">問6</button>
   </div>
   <button class="btn reveal-btn" onclick="reveal()">点数を公開</button>
   <div style="display:grid;grid-template-columns:repeat(10,1fr);gap:2px;">
@@ -198,6 +198,7 @@ import { initializeApp, getDatabase, ref, set, remove, onValue, get } from '../s
 import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue, voteStep } from '../src/shared/ippon.js';
 import { PLAYERS_PATH, PLAYER_COUNT, playerAt, scoreIndex, playersFromValue, escapeHtml } from '../src/shared/players.js';
 import { CLIENTS_MAIN_PATH, mainStatusPhase } from '../src/shared/mainStatus.js';
+import { ODAI_COUNT_PATH, DEFAULT_ODAI_COUNT, MAX_ODAI_COUNT, odaiCountFromValue } from '../src/shared/odai.js';
 
 const STORAGE_BASE = window.IPPON_CONFIG.storageBase;
 
@@ -364,6 +365,19 @@ onValue(ref(db, PLAYERS_PATH), (snap) => applyPlayerNames(playersFromValue(snap.
 // IPPON に必要な票数（設定画面で変更。無ければ 6）。投票音 1〜6.mp3 は voteStep() で割り振る
 let threshold = DEFAULT_THRESHOLD;
 onValue(ref(db, THRESHOLD_PATH), (snap) => { threshold = thresholdFromValue(snap.val()); });
+
+// お題数（設定画面で変更。無ければ 6）。問N・▶N ボタンは設定を超える番号を隠す（ルールも同じ上限で拒否する）
+function applyOdaiCount(count) {
+  for (let n = 1; n <= MAX_ODAI_COUNT; n++) {
+    const show = n <= count;
+    const btn = document.getElementById('odai-btn-' + n);
+    if (btn) btn.style.display = show ? '' : 'none';
+    const readBtn = document.getElementById('odai-read-btn-' + n);
+    if (readBtn) readBtn.style.display = show ? '' : 'none';
+  }
+}
+applyOdaiCount(DEFAULT_ODAI_COUNT);
+onValue(ref(db, ODAI_COUNT_PATH), (snap) => applyOdaiCount(odaiCountFromValue(snap.val())));
 
 // 投票音キュー
 let soundQueue = [];
