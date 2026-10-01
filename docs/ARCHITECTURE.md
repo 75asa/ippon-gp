@@ -28,8 +28,8 @@
 
 | 画面 | 読む | 書く |
 |---|---|---|
-| HOST | `votes`, `scores`, `mode`, `se_master`, `se_trigger`, `agenda`, `answer_text`, `settings/players`, `settings/ipponThreshold`, `settings/odaiCount`, `camera_quality` | ほぼ全部（下記スキーマ参照） |
-| MAIN | `mode`, `taiki`, `odai`, `votes`, `revealed`, `scores`, `agenda`, `answer_text`, `keep_audio`, `camera_room`, `settings/odaiCount` | `agenda` の削除（動画終了時）、`camera_quality`（配信品質の要約。変化時 + heartbeat で低頻度に書き、切断時は削除） |
+| HOST | `votes`, `scores`, `mode`, `se_master`, `se_trigger`, `agenda`, `answer_text`, `settings/players`, `settings/ipponThreshold`, `settings/odaiCount`, `clients/main`, `camera_quality` | ほぼ全部（下記スキーマ参照） |
+| MAIN | `mode`, `taiki`, `odai`, `votes`, `revealed`, `scores`, `agenda`, `answer_text`, `keep_audio`, `camera_room`, `settings/odaiCount` | `agenda` の削除（動画終了時）、`clients/main`（素材読み込み状況、#26）、`camera_quality`（配信品質の要約。変化時 + heartbeat で低頻度に書き、切断時は削除） |
 | JUDGE | `mode`, `revealed`, `votes`, `seats`, `settings/judges`, `settings/ipponThreshold` | `votes/{seat} = true`、`seats/{seat}`（座席ロック） |
 | ADMIN（設定画面） | `settings/players`, `settings/judges`, `settings/ipponThreshold`, `settings/odaiCount`, `votes` | `settings/judges`（票がある間は名前・種別のみ）、`settings/ipponThreshold`（票が無いときのみ）、`settings/players`（いつでも）、`settings/odaiCount`（いつでも） |
 | CAM | — | `camera_room`（PeerJS ルーム ID の公開 / 削除） |
@@ -56,6 +56,7 @@
 | `settings/ipponThreshold` | `1..10`（整数）/ 削除 | IPPON に必要な票数。審査員の定員以下。無ければ 6（`web/src/shared/ippon.js`） | ADMIN |
 | `settings/players` | `{ [N: 1..5]: { last, first? } }` / 削除 | 回答者の名前（上段は必須、下段は省略可）。無ければ `web/src/shared/players.js` の初期値 | ADMIN |
 | `settings/odaiCount` | `1..6`（整数）/ 削除 | お題数。HOST の「問1」〜「問N」ボタン・読み上げボタンと MAIN の `odai_1..N` 表示の上限。素材（お題画像・読み上げ音声）が 6 問分までなのでこの範囲。無ければ 6（`web/src/shared/odai.js`） | ADMIN |
+| `clients/main` | `{ loaded, total, failed: string[], failedCount, ts }` / 削除 | MAIN の素材読み込み状況（#26）。`loaded`/`total` は件数、`failed` は失敗した素材の短いパスを最大 10 件（`web/src/shared/mainStatus.js` の `MAX_FAILED`）、`failedCount` は実際の失敗件数（一覧が切り詰められていても件数は正しい）、`ts` は書き込み時刻（`serverTimestamp()`）。HOST は `loaded`/`total`/`failedCount` から進行中・完了・一部失敗を表示する（`mainStatusPhase()`）。読み込み状況が変わるたびに書くが、直近の書き込みから間もない・内容が同じときは間引く（読み込み完了 or 失敗確定の最終状態は必ず書く）。**2 つ MAIN タブが開いている場合は最後に書いた方が勝つ（last-writer-wins）**。MAIN が閉じる・リロードされると `onDisconnect().remove()` で消える（HOST は「未接続」に戻る）。共有ノードなので、もう一方の MAIN タブがまだ動いていても onDisconnect で消えることがある（そのタブの次の状態変化で再び書かれる）。`onDisconnect()` は再接続後に自動で再登録されない（Firebase の既知の仕様）ため、`.info/connected` が `true` になるたびに再登録し、内容が変わっていなくても直前の状態を強制的に書き直す（Wi‑Fi が一瞬切れて RTDB がサーバー側で消した後、復帰しても読み込み状態自体は変化がなく書き直されない、というすり抜けの対策） | MAIN |
 
 ### 3.1 既知の設計課題
 

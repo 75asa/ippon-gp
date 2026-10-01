@@ -157,6 +157,12 @@ h1 { color: #f5c400; font-size: 14px; letter-spacing: 2px; margin-bottom: 6px; }
   <button id="master-btn" onclick="window.becomeMaster()" style="background:#1a2a1a;border:1px solid #44aa44;color:#88ff88;font-size:11px;padding:3px 12px;border-radius:6px;cursor:pointer;margin-left:auto;">マスターになる</button>
 </div>
 
+<div id="main-status-bar" onclick="window.toggleMainStatusDetail()" style="width:94vw;margin:0 auto 4px;background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:6px 10px;display:flex;align-items:center;gap:10px;cursor:pointer;">
+  <span style="font-size:11px;color:#aaa;">🖥️ MAIN 素材:</span>
+  <span id="main-status-label" style="font-size:11px;color:#888;">確認中…</span>
+  <span style="font-size:10px;color:#666;margin-left:auto;">タップで詳細</span>
+</div>
+<div id="main-status-detail" style="width:94vw;margin:0 auto 4px;background:#1a0a0a;border:1px solid #663333;border-radius:8px;padding:6px 10px;display:none;font-size:11px;color:#ffb3b3;max-height:20vh;overflow-y:auto;"></div>
 <!-- 配信品質（#63）。MAIN が書く camera_quality を購読して表示。原因の切り分けは REHEARSAL.md 参照 -->
 <div id="camera-quality-bar" style="width:94vw;margin:0 auto 4px;background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:6px 10px;display:flex;align-items:center;gap:10px;">
   <span style="font-size:11px;color:#aaa;">🎥 CAM:</span>
@@ -195,7 +201,8 @@ h1 { color: #f5c400; font-size: 14px; letter-spacing: 2px; margin-bottom: 6px; }
 <script type="module">
 import { initializeApp, getDatabase, ref, set, remove, onValue, get } from '../src/shared/firebase.js';
 import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue, voteStep } from '../src/shared/ippon.js';
-import { PLAYERS_PATH, PLAYER_COUNT, playerAt, scoreIndex, playersFromValue } from '../src/shared/players.js';
+import { PLAYERS_PATH, PLAYER_COUNT, playerAt, scoreIndex, playersFromValue, escapeHtml } from '../src/shared/players.js';
+import { CLIENTS_MAIN_PATH, mainStatusPhase } from '../src/shared/mainStatus.js';
 import { ODAI_COUNT_PATH, DEFAULT_ODAI_COUNT, MAX_ODAI_COUNT, odaiCountFromValue } from '../src/shared/odai.js';
 import { formatQualityRecord, isQualityStale } from '../src/shared/webrtc-stats.js';
 
@@ -658,6 +665,54 @@ onValue(ref(db, 'se_master'), (snapshot) => {
     btn.textContent = 'マスターになる';
     if (subLabel) { subLabel.textContent = 'なし'; subLabel.style.color = '#888'; }
   }
+});
+
+// MAIN の素材読み込み状況を表示（#26）。MAIN が clients/main に書く要約を読むだけ。
+// データが無ければ（未接続・onDisconnect で消えた）「未確認」として、実機を見に行くべきことが分かるようにする。
+let mainStatusDetailOpen = false;
+let lastMainStatus = null;
+window.toggleMainStatusDetail = () => {
+  mainStatusDetailOpen = !mainStatusDetailOpen;
+  renderMainStatus();
+};
+function renderMainStatus() {
+  const v = lastMainStatus;
+  const label = document.getElementById('main-status-label');
+  const bar = document.getElementById('main-status-bar');
+  const detail = document.getElementById('main-status-detail');
+  const phase = mainStatusPhase(v);
+  if (phase === 'unknown') {
+    label.textContent = '未確認（MAIN 未接続 or 読み込み前）';
+    label.style.color = '#888';
+    bar.style.borderColor = '#333';
+    detail.style.display = 'none';
+    return;
+  }
+  const failedCount = typeof v.failedCount === 'number' ? v.failedCount : (Array.isArray(v.failed) ? v.failed.length : 0);
+  if (phase === 'error') {
+    label.textContent = `${v.loaded} / ${v.total} ⚠ ${failedCount} 件失敗`;
+    label.style.color = '#ff8888';
+    bar.style.borderColor = '#aa4444';
+  } else if (phase === 'done') {
+    label.textContent = `${v.loaded} / ${v.total} ✓`;
+    label.style.color = '#88ff88';
+    bar.style.borderColor = '#333';
+  } else {
+    label.textContent = `${v.loaded} / ${v.total} 読み込み中…`;
+    label.style.color = '#f5c400';
+    bar.style.borderColor = '#333';
+  }
+  if (mainStatusDetailOpen && Array.isArray(v.failed) && v.failed.length) {
+    detail.innerHTML = v.failed.map((f) => `<div>${escapeHtml(f)}</div>`).join('') +
+      (failedCount > v.failed.length ? `<div style="color:#999;">…他 ${failedCount - v.failed.length} 件</div>` : '');
+    detail.style.display = 'block';
+  } else {
+    detail.style.display = 'none';
+  }
+}
+onValue(ref(db, CLIENTS_MAIN_PATH), (snapshot) => {
+  lastMainStatus = snapshot.val();
+  renderMainStatus();
 });
 
 // SEトリガー監視（マスターのみ再生）

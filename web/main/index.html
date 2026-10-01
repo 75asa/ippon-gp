@@ -234,8 +234,15 @@ body { background: #000; display: flex; align-items: center; justify-content: ce
     var hide = !!document.fullscreenElement || dismissed;
     if (finished && !c.error && !hide) hideTimer = setTimeout(function() { el.hidden = true; }, 4000);
     el.hidden = hide;
+
+    // HOST から見える化（#26）。読み込み状態（order/state）が変わるたびに通知する。
+    // 表示の出し分け（全画面判定・閉じるボタン等）は通知しない: RTDB に書くのは読み込み結果そのものだけにする
+    changeListeners.forEach(function(fn) {
+      try { fn(order.slice(), Object.assign({}, state)); } catch (e) {}
+    });
   }
 
+  var changeListeners = [];
   window.IpponAssets = {
     // 同じ URL は 1 回だけ数える
     register: function(urls) {
@@ -245,6 +252,11 @@ body { background: #000; display: flex; align-items: center; justify-content: ce
         load(u, false);
       });
       render();
+    },
+    // 読み込み状態が変わるたびに fn(order, state) を呼ぶ（登録時にも現在値で 1 回呼ぶ）
+    onChange: function(fn) {
+      changeListeners.push(fn);
+      fn(order.slice(), Object.assign({}, state));
     },
   };
   document.addEventListener('DOMContentLoaded', render);
@@ -382,11 +394,12 @@ body { background: #000; display: flex; align-items: center; justify-content: ce
 </div>
 
 <script type="module">
-import { initializeApp, getDatabase, ref, onValue, onDisconnect, remove, set, get } from "../src/shared/firebase.js";
+import { initializeApp, getDatabase, ref, onValue, onDisconnect, remove, get, set, serverTimestamp } from "../src/shared/firebase.js";
 import { CODEC_DEFAULTS, preferCodec, setBitrateHints } from "../src/shared/sdp.js";
 import { watchQuality, watchConnectionState, formatQuality, toQualityRecord, qualityRecordEquals, QUALITY_PUBLISH_TICK_MS, QUALITY_HEARTBEAT_MS } from "../src/shared/webrtc-stats.js";
 import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue, voteStep } from "../src/shared/ippon.js";
 import { PLAYERS_PATH, PLAYER_COUNT, playerAt, scoreIndex, playersFromValue, escapeHtml } from "../src/shared/players.js";
+import { CLIENTS_MAIN_PATH, buildMainStatus, shouldPublish } from "../src/shared/mainStatus.js";
 import { ODAI_COUNT_PATH, DEFAULT_ODAI_COUNT, odaiCountFromValue } from "../src/shared/odai.js";
 
 const STORAGE_BASE = window.IPPON_CONFIG.storageBase;
@@ -704,6 +717,50 @@ function renderScoreboard(scores) {
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
+
+// ===== 素材読み込み状況を HOST から見える化（#26） =====
+// window.IpponAssets（asset-status IIFE）の読み込み結果を clients/main に公開する。
+// 進捗の変化ごとに書きすぎないよう、内容が変わっていない・直近に書いたばかりのときは間引く
+// （読み込みが終わった／失敗が確定した最終状態は間引かずに必ず書く）。
+// 2 つ目の MAIN タブが開いている場合は最後に書いた方が勝つ（last-writer-wins）。
+// ルールで拒否された場合（デプロイ前など）も MAIN 側の動作には影響させない。
+//
+// onDisconnect() は再接続後に自動で再登録されない（Firebase の既知の仕様）。会場 Wi-Fi が一瞬切れると
+// サーバー側で clients/main が消えるが、復帰後も読み込み状態自体は変わっていないので、内容比較だけだと
+// 二度と書き直されず HOST が「未接続」表示のまま止まってしまう。.info/connected の true を受け取るたびに
+// onDisconnect を再登録し、直前の状態を force=true で書き直すことでこれを防ぐ。
+(function() {
+  const MIN_WRITE_INTERVAL_MS = 300;
+  const statusRef = ref(db, CLIENTS_MAIN_PATH);
+  let lastPublished = null;
+  let lastWriteAt = null;
+  let lastOrder = [];
+  let lastState = {};
+
+  function publish(order, state, force) {
+    if (order.length === 0) return; // まだ何も登録されていない
+    const status = buildMainStatus(order, state);
+    const now = Date.now();
+    if (!shouldPublish(lastPublished, status, lastWriteAt, now, MIN_WRITE_INTERVAL_MS, force)) return;
+    lastPublished = status;
+    lastWriteAt = now;
+    set(statusRef, { ...status, ts: serverTimestamp() }).catch(() => {});
+  }
+
+  if (window.IpponAssets && typeof window.IpponAssets.onChange === 'function') {
+    window.IpponAssets.onChange((order, state) => {
+      lastOrder = order;
+      lastState = state;
+      publish(order, state, false);
+    });
+  }
+
+  onValue(ref(db, '.info/connected'), (snapshot) => {
+    if (snapshot.val() !== true) return;
+    onDisconnect(statusRef).remove().catch(() => {});
+    publish(lastOrder, lastState, true);
+  });
+})();
 
 let currentVotes = 0;
 let currentRevealed = false;
