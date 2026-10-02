@@ -307,6 +307,22 @@ const cases = [
   ['clients 全体への一括書き込みは拒否', put('/clients', { main: { loaded: 1, total: 1, ts: { '.sv': 'timestamp' } } }), DENY],
   ['後片付け: clients/main を消す', del('/clients/main'), ALLOW],
 
+  // #22: HOST の modeUpdates() が返す複数キーのパッチを、update()（REST では PATCH）で
+  // 1 回のアトミック書き込みにする。ここに来た時点で votes・settings/judges は空
+  ['複数キー同時PATCH（採点モードへの遷移）は許可', patch('/', {
+    mode: 'saiten', keep_audio: true, agenda: null, answer_text: null, odai: null, taiki: null, votes: null, revealed: null,
+  }), ALLOW],
+  ['複数キー同時PATCH（お題2への遷移）は許可', patch('/', {
+    mode: 'odai', odai: 2, revealed: false, agenda: null, answer_text: null, taiki: null, votes: null,
+  }), ALLOW],
+  ['複数キー同時PATCHでも odai の範囲検証は効く（範囲外は拒否）', patch('/', { mode: 'odai', odai: 9, revealed: false }), DENY],
+  ['複数キー同時PATCHでも mode の enum 検証は効く（不正値は拒否）', patch('/', { mode: 'hack', taiki: true }), DENY],
+  ['複数キー同時PATCHでも votes への上書きは拒否される（削除以外は不可）', patch('/', { mode: 'taiki', votes: { 1: true } }), DENY],
+  ['複数キー同時PATCH（待機モードへの遷移）は許可', patch('/', {
+    mode: 'taiki', taiki: true, odai: null, agenda: null, answer_text: null, votes: null, revealed: null,
+  }), ALLOW],
+  ['複数キー同時PATCH（投票リセット、mode は変えない）は許可', patch('/', { votes: null, revealed: false }), ALLOW],
+
   // 読み取り
   ['ルートの読み取りは誰でも可', { method: 'GET', path: '/' }, ALLOW],
 ];
