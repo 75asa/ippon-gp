@@ -11,8 +11,8 @@
 
 - [ ] `main` にリハーサルで使うコードが全部入っている。以降は本番までバグ修正以外をマージしない
 - [ ] `git tag v1.0-tokyo-rc` を打ち、GitHub Pages（または本番ホスティング）に **その tag の内容** がデプロイされている
-- [ ] `web/config/config.js` の `firebase` が **本番用 Firebase プロジェクト** を指している（`web/config/config.example.js` のプレースホルダーのままになっていない）
-- [ ] `web/config/config.js` の `storageBase` が同じプロジェクトの Storage を指している
+- [ ] `web/public/config/config.js` の `firebase` が **本番用 Firebase プロジェクト** を指している（`web/public/config/config.example.js` のプレースホルダーのままになっていない）
+- [ ] `web/public/config/config.js` の `storageBase` が同じプロジェクトの Storage を指している
 - [ ] 素材が Firebase Storage にすべてアップロード済み（[ARCHITECTURE.md 7 章](ARCHITECTURE.md#7-素材firebase-storage) の一覧）: 採点フレーム `main_0..6`, `main_IPPON`、結果バッジ `kekka_0..5`、お題画像 + 読み上げ mp3 ×6、紹介画像（player / judge）、顔写真、アジェンダ画像（ルール・QR・優勝）、OP 動画 2 本、SE 一式
 - [ ] 回答者 5 名の名前が正しい（HOST のスコア欄、MAIN のスコアボード）
 - [ ] 設定画面（ランチャーの歯車 → `admin/`）で審査員の名前・種別・人数（6〜10）を入れ、「保存済み」になっている。JUDGE の座席名に反映されている

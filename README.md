@@ -52,7 +52,7 @@ python3 -m http.server 8080 -d web   # http://localhost:8080/
 ```
 
 > ⚠️ **現状の制約**: 素材ファイル名・出演者名・お題が各 HTML にハードコードされています。
-> Firebase プロジェクトと Storage のベース URL は `web/config/config.js`（ひな形: `web/config/config.example.js`）で差し替えられます。
+> Firebase プロジェクトと Storage のベース URL は `web/public/config/config.js`（ひな形: `web/public/config/config.example.js`）で差し替えられます。
 > 残りを解消する「設定駆動化」が [ロードマップ](docs/ROADMAP.md) M1 の最優先事項です（#17, #18, #19）。
 
 ### 必要なもの
@@ -76,8 +76,8 @@ python3 -m http.server 8080 -d web   # http://localhost:8080/
 │   ├── camera/             # カメラ配信
 │   ├── admin/              # 設定画面（審査員など）
 │   ├── src/shared/         # 画面間で共有するモジュール（審査員の定義など）
-│   ├── config/config.js    # Firebase 設定・Storage ベース URL（環境ごとに差し替え）
-│   └── ippon_*.html        # 旧 URL（配布済み QR）→ 新 URL へのリダイレクト
+│   ├── public/config/config.js  # Firebase 設定・Storage ベース URL（環境ごとに差し替え）
+│   └── public/ippon_*.html # 旧 URL（配布済み QR）→ 新 URL へのリダイレクト
 ├── firebase/               # RTDB セキュリティルール
 ├── tests/rules/            # セキュリティルールのテスト（エミュレータ）
 ├── docs/                   # 設計・計画ドキュメント

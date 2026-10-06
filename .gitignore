@@ -5,3 +5,4 @@ firebase-debug.log
 config/firebase.local.js
 database-debug.log
 ui-debug.log
+dist/
