@@ -398,7 +398,7 @@ import { initializeApp, getDatabase, ref, onValue, onDisconnect, remove, get, se
 import { CODEC_DEFAULTS, preferCodec, setBitrateHints } from "../src/shared/sdp.js";
 import { watchQuality, watchConnectionState, formatQuality, toQualityRecord, qualityRecordEquals, QUALITY_PUBLISH_TICK_MS, QUALITY_HEARTBEAT_MS } from "../src/shared/webrtc-stats.js";
 import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue, voteStep } from "../src/shared/ippon.js";
-import { PLAYERS_PATH, PLAYER_COUNT, playerAt, scoreIndex, playersFromValue, escapeHtml } from "../src/shared/players.js";
+import { PLAYERS_PATH, PLAYER_COUNT, PLAYER_COUNT_PATH, DEFAULT_PLAYER_COUNT, playerAt, scoreIndex, playersFromValue, playerCountFromValue, isPosVisible, escapeHtml } from "../src/shared/players.js";
 import { CLIENTS_MAIN_PATH, buildMainStatus, shouldPublish } from "../src/shared/mainStatus.js";
 import { ODAI_COUNT_PATH, DEFAULT_ODAI_COUNT, odaiCountFromValue } from "../src/shared/odai.js";
 
@@ -677,6 +677,8 @@ window.IpponAssets.register([...Object.values(images), ...PLAYER_IMGS]);
 // 回答者の名前は設定画面（admin/）で編集する settings/players から。PLAYER_IMGS と同じく左から回答者 5 → 1
 let players = playersFromValue(null).players;
 let lastScores = [0, 0, 0, 0, 0];
+// 回答者数（設定画面で変更。無ければ 5）。回答者 1..N の卓だけ描き、左側（番号の大きい回答者）の卓を隠す
+let playerCount = DEFAULT_PLAYER_COUNT;
 const STICKS = 10;
 
 function renderScoreboard(scores) {
@@ -685,6 +687,7 @@ function renderScoreboard(scores) {
   const sb = document.getElementById('scoreboard');
   sb.innerHTML = `
 <div style="width:100%;height:80px;background:#A100FF;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><div style="color:#fff;font-size:52px;font-weight:900;letter-spacing:0.15em;text-align:center;text-shadow: 0 0 10px #fff, 0 0 20px #fff, 0 0 40px #c084fc, 0 0 80px #c084fc;">SONG OGIRI GRAND PRIX</div></div><div class="sb-stage" style="display:flex;flex-direction:row;align-items:flex-start;justify-content:center;gap:40px;width:100%;padding:4px 16px 0;height:904px;overflow:visible;">` + sbPlayers.map((p, pi) => {
+    if (!isPosVisible(pi, playerCount)) return '';
     const sc = scores[scoreIndex(playerAt(pi))] || 0;
     const lit = sc % STICKS === 0 && sc > 0 ? STICKS : sc % STICKS;
     const tubes = Array.from({length: STICKS}, (_, i) => `
@@ -954,6 +957,11 @@ onValue(ref(db, 'scores'), (snapshot) => {
 
 onValue(ref(db, PLAYERS_PATH), (snapshot) => {
   players = playersFromValue(snapshot.val()).players;
+  renderScoreboard(lastScores);
+});
+
+onValue(ref(db, PLAYER_COUNT_PATH), (snapshot) => {
+  playerCount = playerCountFromValue(snapshot.val());
   renderScoreboard(lastScores);
 });
 

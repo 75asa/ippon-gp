@@ -265,6 +265,17 @@ const cases = [
   ['odaiCount を消した後は odai = 6 が再び許可', put('/odai', 6), ALLOW],
   ['後片付け: odai を消す', del('/odai'), ALLOW],
 
+  // settings/playerCount（回答者数、#18）。2〜5 の整数のみ。scores は常に 5 要素のまま
+  ['playerCount = 3 は許可', put('/settings/playerCount', 3), ALLOW],
+  ['playerCount 設定中も scores = [0,0,0,0,0]（5 要素）は許可', put('/scores', [0, 0, 0, 0, 0]), ALLOW],
+  ['playerCount 設定中は scores 要素 3 個は拒否（要素数は 5 のまま）', put('/scores', [0, 0, 0]), DENY],
+  ['playerCount = 1 は拒否', put('/settings/playerCount', 1), DENY],
+  ['playerCount = 6 は拒否（顔写真・scores は 5 人分まで）', put('/settings/playerCount', 6), DENY],
+  ['playerCount = 2.5 は整数でないので拒否', put('/settings/playerCount', 2.5), DENY],
+  ['playerCount = "3" は型違いで拒否', put('/settings/playerCount', '3'), DENY],
+  ['playerCount = 5 は許可', put('/settings/playerCount', 5), ALLOW],
+  ['後片付け: playerCount を消す（初期値 5 に戻す）', del('/settings/playerCount'), ALLOW],
+
   // seats（座席ロック）。ここに来た時点で votes・settings は空
   ['seats/1 を端末 A が取れる', put('/seats/1', seat(DEV_A)), ALLOW],
   ['seats/1 を端末 B が上書きするのは拒否', put('/seats/1', seat(DEV_B)), DENY],
