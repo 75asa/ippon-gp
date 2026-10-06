@@ -513,10 +513,16 @@ onValue(ref(db, 'mode'), (snap) => {
 // applyMode() は markAgendaClear() で「これから自分で agenda を消す（差し替えは無い）」ことを
 // 事前にマークし（agendaIsSet が真のときだけ）、直後に agenda リスナーが呼ばれてもその1回は
 // mode の巻き戻しをしないようにする（詳細は web/src/shared/agenda.js）。
+// 書き込み拒否（ルール違反・オフライン）時は update() が全パスごと落ちるので、立てたマークを戻す。
 function applyMode(action, payload) {
   const patch = modeUpdates(action, payload);
-  if (patch.agenda === null && agendaIsSet) markAgendaClear(false);
-  return update(ref(db), patch);
+  cancelAgendaSet(); // 直前の showAgenda の遅延書き込みが、この遷移で消した agenda を書き直さないように
+  const marked = patch.agenda === null && agendaIsSet;
+  if (marked) markAgendaClear(false);
+  return update(ref(db), patch).catch((e) => {
+    if (marked) pendingAgendaClear = null;
+    console.error('Mode transition failed:', action, e);
+  });
 }
 
 window.showTaiki = () => {
@@ -807,6 +813,20 @@ let agendaIsSet = false;
 
 let previousMode = 'taiki';
 
+// mode を書いてから 50ms 後に agenda を書く遅延書き込み。別の遷移（applyMode / 停止 / 再選択）が
+// 入ったらキャンセルしないと、消したはずの agenda が後から書き直される。
+let agendaSetTimer = null;
+let agendaSetSeq = 0; // cancelAgendaSet() のたびに進める。remove() 待ちの後続処理が古いかの判定用
+function cancelAgendaSet() {
+  agendaSetSeq++;
+  clearTimeout(agendaSetTimer);
+  agendaSetTimer = null;
+}
+function scheduleAgendaSet(key) {
+  cancelAgendaSet();
+  agendaSetTimer = setTimeout(() => set(ref(db, 'agenda'), AGENDA_URLS[key]), 50);
+}
+
 function resetAgendaBtnText() {
   ['op_comment','op_movie'].forEach(k => {
     const btn = document.getElementById('agenda-btn-' + k);
@@ -817,7 +837,7 @@ function resetAgendaBtnText() {
 window.showAgenda = (key) => {
   currentAgendaKey = key;
   set(ref(db, 'mode'), 'agenda');
-  setTimeout(() => set(ref(db, 'agenda'), AGENDA_URLS[key]), 50);
+  scheduleAgendaSet(key);
   resetAgendaBtnText();
 };
 
@@ -842,6 +862,7 @@ window.toggleAgendaVideo = (key) => {
   if (currentAgendaKey === key) {
     // 停止（差し替え無し）
     markAgendaClear(false);
+    cancelAgendaSet();
     remove(ref(db, 'agenda'));
     currentAgendaKey = null;
     if (btn) btn.textContent = '▶ ' + (key === 'op_comment' ? 'OP COMMENT' : 'OP MOVIE');
@@ -852,9 +873,13 @@ window.toggleAgendaVideo = (key) => {
     resetAgendaBtnText();
     currentAgendaKey = key;
     markAgendaClear(true);
+    cancelAgendaSet();
+    const seq = agendaSetSeq;
     remove(ref(db, 'agenda')).then(() => {
+      // remove の完了待ちの間に別の遷移・切替が入っていたら、その後ろに agenda を書かない
+      if (seq !== agendaSetSeq) return;
       set(ref(db, 'mode'), 'agenda');
-      setTimeout(() => set(ref(db, 'agenda'), AGENDA_URLS[key]), 50);
+      scheduleAgendaSet(key);
     });
     if (btn) btn.textContent = '■ ' + (key === 'op_comment' ? 'OP COMMENT' : 'OP MOVIE');
   }
