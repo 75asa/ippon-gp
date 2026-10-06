@@ -81,6 +81,12 @@
         ".write": true,
         ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 1 && newData.val() <= 6"
       },
+      "playerCount": {
+        /* 回答者数（#18）。HOST のスコア欄と MAIN のスコアボードに出す人数（回答者 1..N）。
+           顔写真・scores が 5 人分までなので 2〜5 の整数のみ。無ければ 5。scores は常に 5 要素のまま */
+        ".write": true,
+        ".validate": "newData.isNumber() && newData.val() % 1 === 0 && newData.val() >= 2 && newData.val() <= 5"
+      },
       "players": {
         /* 回答者の名前（キーは回答者番号 1..5 = portrait_playerN = scores[N-1]）。採点に影響しないので投票中でも変えられる */
         ".write": true,

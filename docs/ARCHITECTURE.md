@@ -28,10 +28,10 @@
 
 | 画面 | 読む | 書く |
 |---|---|---|
-| HOST | `votes`, `scores`, `mode`, `se_master`, `se_trigger`, `agenda`, `answer_text`, `settings/players`, `settings/ipponThreshold`, `settings/odaiCount`, `clients/main`, `camera_quality` | ほぼ全部（下記スキーマ参照） |
-| MAIN | `mode`, `taiki`, `odai`, `votes`, `revealed`, `scores`, `agenda`, `answer_text`, `keep_audio`, `camera_room`, `settings/odaiCount` | `agenda` の削除（動画終了時）、`clients/main`（素材読み込み状況、#26）、`camera_quality`（配信品質の要約。変化時 + heartbeat で低頻度に書き、切断時は削除） |
+| HOST | `votes`, `scores`, `mode`, `se_master`, `se_trigger`, `agenda`, `answer_text`, `settings/players`, `settings/playerCount`, `settings/ipponThreshold`, `settings/odaiCount`, `clients/main`, `camera_quality` | ほぼ全部（下記スキーマ参照） |
+| MAIN | `mode`, `taiki`, `odai`, `votes`, `revealed`, `scores`, `agenda`, `answer_text`, `keep_audio`, `camera_room`, `settings/odaiCount`, `settings/playerCount` | `agenda` の削除（動画終了時）、`clients/main`（素材読み込み状況、#26）、`camera_quality`（配信品質の要約。変化時 + heartbeat で低頻度に書き、切断時は削除） |
 | JUDGE | `mode`, `revealed`, `votes`, `seats`, `settings/judges`, `settings/ipponThreshold` | `votes/{seat} = true`、`seats/{seat}`（座席ロック） |
-| ADMIN（設定画面） | `settings/players`, `settings/judges`, `settings/ipponThreshold`, `settings/odaiCount`, `votes` | `settings/judges`（票がある間は名前・種別のみ）、`settings/ipponThreshold`（票が無いときのみ）、`settings/players`（いつでも）、`settings/odaiCount`（いつでも） |
+| ADMIN（設定画面） | `settings/players`, `settings/playerCount`, `settings/judges`, `settings/ipponThreshold`, `settings/odaiCount`, `votes` | `settings/judges`（票がある間は名前・種別のみ）、`settings/ipponThreshold`（票が無いときのみ）、`settings/players`（いつでも）、`settings/odaiCount`（いつでも）、`settings/playerCount`（いつでも） |
 | CAM | — | `camera_room`（PeerJS ルーム ID の公開 / 削除） |
 
 ## 3. RTDB スキーマ（ルート直下、フラット）
@@ -43,7 +43,7 @@
 | `odai` | `1..N` / 削除 | 表示中のお題番号（N = `settings/odaiCount`、無ければ 6） | HOST |
 | `votes` | `{ [seat: 1..10]: true }` | 投票済み座席。キー数 = 票数 | JUDGE / HOST(削除) |
 | `revealed` | `boolean` | 「点数を公開」済みか | HOST |
-| `scores` | `number[5]` | 回答者 5 名の累積スコア。`scores[N-1]` が回答者 N（顔写真 `portrait_playerN`）。画面は左から回答者 5 → 1 の順なので、表示位置との変換は `web/src/shared/players.js` の `playerAt()` / `scoreIndex()` で行う | HOST |
+| `scores` | `number[5]` | 回答者 5 名の累積スコア。`scores[N-1]` が回答者 N（顔写真 `portrait_playerN`）。画面は左から回答者 5 → 1 の順なので、表示位置との変換は `web/src/shared/players.js` の `playerAt()` / `scoreIndex()` で行う。回答者数（`settings/playerCount`）が 5 未満でも要素数は常に 5 で、使わない回答者の点は残る | HOST |
 | `agenda` | URL string / 削除 | 投影中の画像・動画 URL。`.mp4` 等を含めば動画 | HOST / MAIN(削除) |
 | `answer_text` | JSON string `{answer,name}` / 削除 | 一般回答テキスト（現在は画像投影に置換され事実上未使用） | HOST |
 | `keep_audio` | `true`（2 秒間） | 採点モード切替時に OP 動画の音声を止めないためのフラグ | HOST |
@@ -56,6 +56,7 @@
 | `settings/ipponThreshold` | `1..10`（整数）/ 削除 | IPPON に必要な票数。審査員の定員以下。無ければ 6（`web/src/shared/ippon.js`） | ADMIN |
 | `settings/players` | `{ [N: 1..5]: { last, first? } }` / 削除 | 回答者の名前（上段は必須、下段は省略可）。無ければ `web/src/shared/players.js` の初期値 | ADMIN |
 | `settings/odaiCount` | `1..6`（整数）/ 削除 | お題数。HOST の「問1」〜「問N」ボタン・読み上げボタンと MAIN の `odai_1..N` 表示の上限。素材（お題画像・読み上げ音声）が 6 問分までなのでこの範囲。無ければ 6（`web/src/shared/odai.js`） | ADMIN |
+| `settings/playerCount` | `2..5`（整数）/ 削除 | 回答者数。HOST の PC スコア欄・スマホのサブ画面と MAIN のスコアボードに出す人数（回答者 1..N。番号の大きい回答者＝画面の左側から隠れる）。顔写真・`scores` が 5 人分までなのでこの範囲。無ければ 5（`web/src/shared/players.js`） | ADMIN |
 | `clients/main` | `{ loaded, total, failed: string[], failedCount, ts }` / 削除 | MAIN の素材読み込み状況（#26）。`loaded`/`total` は件数、`failed` は失敗した素材の短いパスを最大 10 件（`web/src/shared/mainStatus.js` の `MAX_FAILED`）、`failedCount` は実際の失敗件数（一覧が切り詰められていても件数は正しい）、`ts` は書き込み時刻（`serverTimestamp()`）。HOST は `loaded`/`total`/`failedCount` から進行中・完了・一部失敗を表示する（`mainStatusPhase()`）。読み込み状況が変わるたびに書くが、直近の書き込みから間もない・内容が同じときは間引く（読み込み完了 or 失敗確定の最終状態は必ず書く）。**2 つ MAIN タブが開いている場合は最後に書いた方が勝つ（last-writer-wins）**。MAIN が閉じる・リロードされると `onDisconnect().remove()` で消える（HOST は「未接続」に戻る）。共有ノードなので、もう一方の MAIN タブがまだ動いていても onDisconnect で消えることがある（そのタブの次の状態変化で再び書かれる）。`onDisconnect()` は再接続後に自動で再登録されない（Firebase の既知の仕様）ため、`.info/connected` が `true` になるたびに再登録し、内容が変わっていなくても直前の状態を強制的に書き直す（Wi‑Fi が一瞬切れて RTDB がサーバー側で消した後、復帰しても読み込み状態自体は変化がなく書き直されない、というすり抜けの対策） | MAIN |
 
 ### 3.1 状態遷移（mode）
@@ -125,7 +126,7 @@ MAIN 側の自動終了（動画の `onended`）とみなし、見た目のリ�
 - ~~**状態遷移が暗黙的**~~: #22 で解消。各遷移は `modeUpdates()` の 1 パッチを `update()` で 1 回のアトミック書き込みにしている（§3.1）。ただし複数の HOST 端末（PC + サブ画面）が同時に開いている場合、それぞれが独立に `agenda` リスナーを持つため、MAIN 側の自動終了時に全端末が同じ `mode=previousMode` を（同じ値のはずだが）重複して書き込む点は残る。実害は無いため未対応。
 - **`answer_text` と `agenda` の二重経路**（テキスト投影 → 画像投影に切り替えた名残）。`clearAnswerText()` は今回のアトミック化の対象外（事実上未使用のため）。
 - **`keep_audio` の 2 秒 setTimeout** はタイミングハック。#22 で `keep_audio=true` は `mode='saiten'` などと同じ `update()` パッチに含めて書くようにしたが（書き込み自体はアトミック化済み）、2 秒後に別途 `remove()` する後始末は変えていない。理由: MAIN 側は `agenda` が空になった瞬間に一度だけ `get(keep_audio)` を読んで「動画を止めずに隠すか／完全停止するか」を決めており、`keep_audio` を戻すタイミングを詰めるには「MAINが読み終えた」という確認応答を新設する必要がある。ライブ配信中のコードに新しい往復プロトコルを足すのはリスクが高いため、今回は見送った。
-- **回答者数（5）は未設定化（#18）**: `scores` は要素 5 個ちょうどのルール、HOST の PC スコア欄（`sc-0..4` / `addScore(0..4,±1)`）とスマホのサブ画面（`sub-score-0..4`）、MAIN のスコアボード（`renderScoreboard()` の卓の連結装飾 SVG が卓 5 台前提の座標で書かれている）が、いずれも 5 人分を前提にした固定マークアップ・固定ロジックで書かれており、生成的に N 人分へ展開していない。設定値を追加するだけでは動かず、この 3 箇所を N 人分のテンプレート化・座標の一般化にリファクタする必要があるため、お題数（#18 の残り）とは切り離して別途対応する。
+- **回答者数は 2〜5 のみ（#18）**: `settings/playerCount` で HOST のスコア欄と MAIN のスコアボードに出す人数を変えられるが、素材（顔写真 `portrait_player1..5`）と `scores`（要素 5 個ちょうどのルール）が 5 人分なので上限は 5。人数を減らすと回答者 N+1..5 の表示を隠すだけで、`scores` と `settings/players` は 5 人分のまま残る（HOST の固定マークアップ・MAIN の卓の連結装飾 SVG は表示位置ごとに出し分けている）。6 人以上や卓レイアウトの一般化は未対応。
 
 ## 4. 投票 → 演出パイプライン
 

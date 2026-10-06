@@ -4,7 +4,11 @@
 // 形の制約は firebase/database.rules.json と揃えること。
 
 export const PLAYERS_PATH = 'settings/players';
-export const PLAYER_COUNT = 5; // HOST のスコア欄と MAIN のスコアボードが 5 人前提
+export const PLAYER_COUNT = 5; // 回答者数の上限（素材 portrait_player1..5・scores の要素数）。実際の人数は settings/playerCount
+export const PLAYER_COUNT_PATH = 'settings/playerCount';
+export const DEFAULT_PLAYER_COUNT = 5;
+export const MIN_PLAYER_COUNT = 2;
+export const MAX_PLAYER_COUNT = 5; // 顔写真・scores が 1..5 の 5 人分までのため
 export const NAME_MAX = 20;
 
 // 回答者番号 1〜5 の順
@@ -15,6 +19,15 @@ export const DEFAULT_PLAYERS = [
   { last: 'AOKI', first: 'MARINA' },
   { last: 'SAGAWA', first: 'SO' },
 ];
+
+// 回答者数（#18）。正は settings/playerCount（整数）。無い・範囲外のときは 5。
+// N 人のときは回答者 1..N を使い、N+1..5 の表示だけを隠す（scores は常に 5 要素のまま、隠した人の点は残る）。
+// 制約は firebase/database.rules.json と揃えること。
+export function playerCountFromValue(val) {
+  return Number.isInteger(val) && val >= MIN_PLAYER_COUNT && val <= MAX_PLAYER_COUNT ? val : DEFAULT_PLAYER_COUNT;
+}
+// 表示位置 pos（左から 0〜4）の回答者を、回答者数 count のとき表示するか。左側（番号の大きい回答者）から隠す
+export const isPosVisible = (pos, count) => pos >= PLAYER_COUNT - count;
 
 // 画面の左からの並び（表示位置 0〜4）は回答者番号 5 → 1
 export const playerAt = (pos) => PLAYER_COUNT - pos;

@@ -9,6 +9,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; touch-action: manipulation; }
 html, body { overflow: hidden; height: 100%; }
 body { background: #111; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 8px; min-height: 100vh; }
+.player-off { display: none !important; }
 h1 { color: #f5c400; font-size: 14px; letter-spacing: 2px; margin-bottom: 6px; }
 #vote-count { font-size: 72px; font-weight: 900; color: #f5c400; line-height: 1; }
 #vote-label { font-size: 14px; color: #aaa; margin-bottom: 10px; }
@@ -103,12 +104,12 @@ h1 { color: #f5c400; font-size: 14px; letter-spacing: 2px; margin-bottom: 6px; }
     <button class="btn odai-btn" id="odai-btn-6" onclick="showOdai(6)">問6</button>
   </div>
   <button class="btn reveal-btn" onclick="reveal()">点数を公開</button>
-  <div style="display:grid;grid-template-columns:repeat(10,1fr);gap:2px;">
-    <div style="grid-column:span 2;text-align:center;"><div class="score-label" data-player-name="5"></div><div id="sc-0" class="score-num">0</div></div>
-    <div style="grid-column:span 2;text-align:center;"><div class="score-label" data-player-name="4"></div><div id="sc-1" class="score-num">0</div></div>
-    <div style="grid-column:span 2;text-align:center;"><div class="score-label" data-player-name="3"></div><div id="sc-2" class="score-num">0</div></div>
-    <div style="grid-column:span 2;text-align:center;"><div class="score-label" data-player-name="2"></div><div id="sc-3" class="score-num">0</div></div>
-    <div style="grid-column:span 2;text-align:center;"><div class="score-label" data-player-name="1"></div><div id="sc-4" class="score-num">0</div></div>
+  <div id="score-grid" style="display:grid;grid-template-columns:repeat(10,1fr);gap:2px;">
+    <div data-pos="0" style="grid-column:span 2;text-align:center;"><div class="score-label" data-player-name="5"></div><div id="sc-0" class="score-num">0</div></div>
+    <div data-pos="1" style="grid-column:span 2;text-align:center;"><div class="score-label" data-player-name="4"></div><div id="sc-1" class="score-num">0</div></div>
+    <div data-pos="2" style="grid-column:span 2;text-align:center;"><div class="score-label" data-player-name="3"></div><div id="sc-2" class="score-num">0</div></div>
+    <div data-pos="3" style="grid-column:span 2;text-align:center;"><div class="score-label" data-player-name="2"></div><div id="sc-3" class="score-num">0</div></div>
+    <div data-pos="4" style="grid-column:span 2;text-align:center;"><div class="score-label" data-player-name="1"></div><div id="sc-4" class="score-num">0</div></div>
   </div>
 
   <!-- 行3：読み上げ/リセット/＋－ -->
@@ -121,17 +122,17 @@ h1 { color: #f5c400; font-size: 14px; letter-spacing: 2px; margin-bottom: 6px; }
     <button class="btn odai-read-btn" id="odai-read-btn-6" onclick="playOdai(6)">▶6</button>
   </div>
   <button class="btn reset-btn" onclick="resetVotes()">投票をリセット</button>
-  <div style="display:grid;grid-template-columns:repeat(10,1fr);gap:2px;">
-    <button class="btn score-btn" onclick="addScore(0,1)">＋</button>
-    <button class="btn score-btn-minus" onclick="addScore(0,-1)">－</button>
-    <button class="btn score-btn" onclick="addScore(1,1)">＋</button>
-    <button class="btn score-btn-minus" onclick="addScore(1,-1)">－</button>
-    <button class="btn score-btn" onclick="addScore(2,1)">＋</button>
-    <button class="btn score-btn-minus" onclick="addScore(2,-1)">－</button>
-    <button class="btn score-btn" onclick="addScore(3,1)">＋</button>
-    <button class="btn score-btn-minus" onclick="addScore(3,-1)">－</button>
-    <button class="btn score-btn" onclick="addScore(4,1)">＋</button>
-    <button class="btn score-btn-minus" onclick="addScore(4,-1)">－</button>
+  <div id="score-btn-grid" style="display:grid;grid-template-columns:repeat(10,1fr);gap:2px;">
+    <button class="btn score-btn" data-pos="0" onclick="addScore(0,1)">＋</button>
+    <button class="btn score-btn-minus" data-pos="0" onclick="addScore(0,-1)">－</button>
+    <button class="btn score-btn" data-pos="1" onclick="addScore(1,1)">＋</button>
+    <button class="btn score-btn-minus" data-pos="1" onclick="addScore(1,-1)">－</button>
+    <button class="btn score-btn" data-pos="2" onclick="addScore(2,1)">＋</button>
+    <button class="btn score-btn-minus" data-pos="2" onclick="addScore(2,-1)">－</button>
+    <button class="btn score-btn" data-pos="3" onclick="addScore(3,1)">＋</button>
+    <button class="btn score-btn-minus" data-pos="3" onclick="addScore(3,-1)">－</button>
+    <button class="btn score-btn" data-pos="4" onclick="addScore(4,1)">＋</button>
+    <button class="btn score-btn-minus" data-pos="4" onclick="addScore(4,-1)">－</button>
   </div>
 
   <!-- 行4：音声/笑い/スコアリセット -->
@@ -201,7 +202,7 @@ h1 { color: #f5c400; font-size: 14px; letter-spacing: 2px; margin-bottom: 6px; }
 <script type="module">
 import { initializeApp, getDatabase, ref, set, remove, update, onValue, get } from '../src/shared/firebase.js';
 import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue, voteStep } from '../src/shared/ippon.js';
-import { PLAYERS_PATH, PLAYER_COUNT, playerAt, scoreIndex, playersFromValue, escapeHtml } from '../src/shared/players.js';
+import { PLAYERS_PATH, PLAYER_COUNT, PLAYER_COUNT_PATH, DEFAULT_PLAYER_COUNT, playerAt, scoreIndex, playersFromValue, playerCountFromValue, isPosVisible, escapeHtml } from '../src/shared/players.js';
 import { CLIENTS_MAIN_PATH, mainStatusPhase } from '../src/shared/mainStatus.js';
 import { ODAI_COUNT_PATH, DEFAULT_ODAI_COUNT, MAX_ODAI_COUNT, odaiCountFromValue } from '../src/shared/odai.js';
 import { formatQualityRecord, isQualityStale } from '../src/shared/webrtc-stats.js';
@@ -388,6 +389,15 @@ function applyOdaiCount(count) {
 }
 applyOdaiCount(DEFAULT_ODAI_COUNT);
 onValue(ref(db, ODAI_COUNT_PATH), (snap) => applyOdaiCount(odaiCountFromValue(snap.val())));
+
+// 回答者数（設定画面で変更。無ければ 5）。回答者 1..N を残し、左側（番号の大きい回答者）の PC スコア欄・＋－・スマホのサブ画面の行を隠す
+function applyPlayerCount(count) {
+  document.querySelectorAll('[data-pos]').forEach((el) => el.classList.toggle('player-off', !isPosVisible(Number(el.dataset.pos), count)));
+  document.getElementById('score-grid').style.gridTemplateColumns = 'repeat(' + count * 2 + ',1fr)';
+  document.getElementById('score-btn-grid').style.gridTemplateColumns = 'repeat(' + count * 2 + ',1fr)';
+}
+applyPlayerCount(DEFAULT_PLAYER_COUNT);
+onValue(ref(db, PLAYER_COUNT_PATH), (snap) => applyPlayerCount(playerCountFromValue(snap.val())));
 
 // 投票音キュー
 let soundQueue = [];
@@ -969,7 +979,7 @@ document.querySelectorAll('button[data-se]').forEach(btn => {
   <div style="text-align:center;font-size:11px;color:#d4a017;font-weight:900;letter-spacing:3px;flex-shrink:0;">IPPON HOST</div>
   <div style="flex:1;display:flex;flex-direction:column;gap:6px;overflow:hidden;">
     <div style="flex:1;background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px;overflow:hidden;">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex:1;">
+      <div data-pos="4" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex:1;">
         <span style="font-size:12px;color:#aaa;font-weight:900;min-width:90px;" data-player-name="1"></span>
         <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
           <button onclick="window.addScore(4,-1)" style="background:#3a1a1a;border:1px solid #aa4444;color:#ff8888;font-size:16px;width:32px;height:32px;border-radius:6px;cursor:pointer;">－</button>
@@ -977,7 +987,7 @@ document.querySelectorAll('button[data-se]').forEach(btn => {
           <button onclick="window.addScore(4,1)" style="background:#1a3a1a;border:1px solid #44aa44;color:#88ff88;font-size:16px;width:32px;height:32px;border-radius:6px;cursor:pointer;">＋</button>
         </div>
       </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex:1;">
+      <div data-pos="3" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex:1;">
         <span style="font-size:12px;color:#aaa;font-weight:900;min-width:90px;" data-player-name="2"></span>
         <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
           <button onclick="window.addScore(3,-1)" style="background:#3a1a1a;border:1px solid #aa4444;color:#ff8888;font-size:16px;width:32px;height:32px;border-radius:6px;cursor:pointer;">－</button>
@@ -985,7 +995,7 @@ document.querySelectorAll('button[data-se]').forEach(btn => {
           <button onclick="window.addScore(3,1)" style="background:#1a3a1a;border:1px solid #44aa44;color:#88ff88;font-size:16px;width:32px;height:32px;border-radius:6px;cursor:pointer;">＋</button>
         </div>
       </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex:1;">
+      <div data-pos="2" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex:1;">
         <span style="font-size:12px;color:#aaa;font-weight:900;min-width:90px;" data-player-name="3"></span>
         <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
           <button onclick="window.addScore(2,-1)" style="background:#3a1a1a;border:1px solid #aa4444;color:#ff8888;font-size:16px;width:32px;height:32px;border-radius:6px;cursor:pointer;">－</button>
@@ -993,7 +1003,7 @@ document.querySelectorAll('button[data-se]').forEach(btn => {
           <button onclick="window.addScore(2,1)" style="background:#1a3a1a;border:1px solid #44aa44;color:#88ff88;font-size:16px;width:32px;height:32px;border-radius:6px;cursor:pointer;">＋</button>
         </div>
       </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex:1;">
+      <div data-pos="1" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex:1;">
         <span style="font-size:12px;color:#aaa;font-weight:900;min-width:90px;" data-player-name="4"></span>
         <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
           <button onclick="window.addScore(1,-1)" style="background:#3a1a1a;border:1px solid #aa4444;color:#ff8888;font-size:16px;width:32px;height:32px;border-radius:6px;cursor:pointer;">－</button>
@@ -1001,7 +1011,7 @@ document.querySelectorAll('button[data-se]').forEach(btn => {
           <button onclick="window.addScore(1,1)" style="background:#1a3a1a;border:1px solid #44aa44;color:#88ff88;font-size:16px;width:32px;height:32px;border-radius:6px;cursor:pointer;">＋</button>
         </div>
       </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex:1;">
+      <div data-pos="0" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex:1;">
         <span style="font-size:12px;color:#aaa;font-weight:900;min-width:90px;" data-player-name="5"></span>
         <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
           <button onclick="window.addScore(0,-1)" style="background:#3a1a1a;border:1px solid #aa4444;color:#ff8888;font-size:16px;width:32px;height:32px;border-radius:6px;cursor:pointer;">－</button>

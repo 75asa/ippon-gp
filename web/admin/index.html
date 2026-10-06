@@ -127,6 +127,27 @@ ol { list-style: none; display: flex; flex-direction: column; gap: 8px; }
     <p class="status" id="status" role="status" aria-live="polite"></p>
   </section>
 
+  <section class="card" aria-labelledby="h-pcount">
+    <div class="card-head">
+      <h1 id="h-pcount">PLAYER COUNT <small>回答者数</small></h1>
+      <span class="pill" id="pc-state">読み込み中…</span>
+    </div>
+    <p class="help">HOST のスコア欄と MAIN のスコアボードに出す回答者の人数です。回答者 1〜N が残り、番号の大きい回答者（画面の左側）から隠れます。顔写真とスコアが 5 人分までなので、2〜5 の範囲で設定してください。隠れた回答者の名前とスコアは残ります。いつでも変えられます。</p>
+    <div class="stepper">
+      <button class="icon" id="pc-minus" type="button" aria-label="1 人減らす">−</button>
+      <input id="pc-input" type="number" inputmode="numeric" min="2" max="5" step="1" aria-label="回答者数">
+      <button class="icon" id="pc-plus" type="button" aria-label="1 人増やす">＋</button>
+      <span class="unit" id="pc-range">人（2〜5）</span>
+    </div>
+    <div class="errors" id="pc-errors" role="alert"></div>
+    <div class="foot">
+      <button class="btn link" id="pc-reset" type="button">初期値（5 人）に戻す</button>
+      <button class="btn ghost push" id="pc-discard" type="button">変更を取り消す</button>
+      <button class="btn primary" id="pc-save" type="button">保存する</button>
+    </div>
+    <p class="status" id="pc-status" role="status" aria-live="polite"></p>
+  </section>
+
   <section class="card" aria-labelledby="h-odai">
     <div class="card-head">
       <h1 id="h-odai">ODAI <small>お題数</small></h1>
@@ -177,7 +198,7 @@ import { JUDGES_PATH, MIN_SEATS, MAX_SEATS, NAME_MAX, KINDS, judgesFromValue, ju
 import { THRESHOLD_PATH, DEFAULT_THRESHOLD, thresholdFromValue } from "../src/shared/ippon.js";
 import { ODAI_COUNT_PATH, DEFAULT_ODAI_COUNT, MIN_ODAI_COUNT, MAX_ODAI_COUNT, odaiCountFromValue } from "../src/shared/odai.js";
 import { SEATS_PATH } from "../src/shared/seats.js";
-import { PLAYERS_PATH, NAME_MAX as PLAYER_NAME_MAX, playersFromValue, playersToRecord, validatePlayers } from "../src/shared/players.js";
+import { PLAYERS_PATH, NAME_MAX as PLAYER_NAME_MAX, playersFromValue, playersToRecord, validatePlayers, PLAYER_COUNT_PATH, DEFAULT_PLAYER_COUNT, MIN_PLAYER_COUNT, MAX_PLAYER_COUNT, playerCountFromValue } from "../src/shared/players.js";
 
 const app = initializeApp(window.IPPON_CONFIG.firebase);
 const db = getDatabase(app);
@@ -561,13 +582,93 @@ onValue(ref(db, ODAI_COUNT_PATH), (snap) => {
   else setOStatus('他の端末でお題数の設定が変わりました。「変更を取り消す」で最新を読み込めます。', 'error');
   renderOdai();
 });
+/* ---- 回答者数 ---- */
+let pcountRemote = DEFAULT_PLAYER_COUNT;
+let pcountIsDefault = true;
+let pcountDraft = DEFAULT_PLAYER_COUNT;
+let pcountSaving = false;
+let pcountLoaded = false;
+let pcountResetArmedUntil = 0;
+
+function pcountErrors() {
+  const n = pcountDraft;
+  if (!Number.isInteger(n)) return ['回答者数は整数で入力してください'];
+  if (n < MIN_PLAYER_COUNT || n > MAX_PLAYER_COUNT) return [`回答者数は ${MIN_PLAYER_COUNT}〜${MAX_PLAYER_COUNT}（顔写真とスコアが 5 人分までのため）にしてください`];
+  return [];
+}
+
+function setPCStatus(text, kind = '') {
+  const el = $('pc-status');
+  el.textContent = text;
+  el.className = 'status' + (kind ? ' ' + kind : '');
+}
+
+function renderPcount() {
+  if (!pcountLoaded) return;
+  const input = $('pc-input');
+  if (document.activeElement !== input) input.value = Number.isFinite(pcountDraft) ? pcountDraft : '';
+  input.disabled = pcountSaving;
+  const dirty = pcountDraft !== pcountRemote;
+  const pill = $('pc-state');
+  if (pcountIsDefault && !dirty) { pill.textContent = '初期値（5 人）'; pill.className = 'pill'; }
+  else if (dirty) { pill.textContent = '未保存の変更あり'; pill.className = 'pill dirty'; }
+  else { pill.textContent = '保存済み'; pill.className = 'pill saved'; }
+  const errors = dirty ? pcountErrors() : [];
+  $('pc-errors').replaceChildren(...errors.map(e => { const d = document.createElement('div'); d.textContent = e; return d; }));
+  $('pc-minus').disabled = pcountSaving || !(pcountDraft > MIN_PLAYER_COUNT);
+  $('pc-plus').disabled = pcountSaving || !(pcountDraft < MAX_PLAYER_COUNT);
+  $('pc-save').disabled = pcountSaving || !dirty || errors.length > 0;
+  $('pc-discard').disabled = pcountSaving || !dirty;
+  $('pc-reset').disabled = pcountSaving || pcountIsDefault;
+  if (Date.now() > pcountResetArmedUntil) $('pc-reset').textContent = '初期値（5 人）に戻す';
+}
+
+async function writePcount(value) {
+  pcountSaving = true; renderPcount(); setPCStatus('保存しています…');
+  try {
+    if (value === null) await remove(ref(db, PLAYER_COUNT_PATH));
+    else await set(ref(db, PLAYER_COUNT_PATH), value);
+    setPCStatus(value === null ? '初期値（5 人）に戻しました。' : `保存しました。HOST と MAIN に回答者 ${value} 人分が表示されます。`, 'ok');
+  } catch (e) {
+    setPCStatus(`保存できませんでした。通信状態を確認して、もう一度保存してください。（${e.code || e.message}）`, 'error');
+  } finally {
+    pcountSaving = false; renderPcount();
+  }
+}
+
+$('pc-input').addEventListener('input', () => { pcountDraft = $('pc-input').value === '' ? NaN : Number($('pc-input').value); renderPcount(); });
+$('pc-minus').addEventListener('click', () => { pcountDraft -= 1; renderPcount(); });
+$('pc-plus').addEventListener('click', () => { pcountDraft += 1; renderPcount(); });
+$('pc-save').addEventListener('click', () => { if (!pcountErrors().length) writePcount(pcountDraft); });
+$('pc-discard').addEventListener('click', () => { pcountDraft = pcountRemote; setPCStatus(''); renderPcount(); });
+$('pc-reset').addEventListener('click', () => {
+  // 誤操作防止のため 2 回押しで実行する
+  if (Date.now() > pcountResetArmedUntil) {
+    pcountResetArmedUntil = Date.now() + 4000;
+    $('pc-reset').textContent = 'もう一度押すと初期値に戻します';
+    setTimeout(renderPcount, 4100);
+    return;
+  }
+  pcountResetArmedUntil = 0;
+  writePcount(null);
+});
+
+onValue(ref(db, PLAYER_COUNT_PATH), (snap) => {
+  const wasDirty = pcountLoaded && pcountDraft !== pcountRemote;
+  pcountIsDefault = snap.val() === null;
+  pcountRemote = playerCountFromValue(snap.val());
+  pcountLoaded = true;
+  if (!wasDirty || pcountSaving) pcountDraft = pcountRemote;
+  else setPCStatus('他の端末で回答者数の設定が変わりました。「変更を取り消す」で最新を読み込めます。', 'error');
+  renderPcount();
+});
 $('t-input').addEventListener('input', () => { thresholdDraft = $('t-input').value === '' ? NaN : Number($('t-input').value); renderThreshold(); });
 $('t-minus').addEventListener('click', () => { thresholdDraft -= 1; renderThreshold(); });
 $('t-plus').addEventListener('click', () => { thresholdDraft += 1; renderThreshold(); });
 $('t-save').addEventListener('click', () => { if (!thresholdErrors().length) writeThreshold(thresholdDraft); });
 $('t-discard').addEventListener('click', () => { thresholdDraft = thresholdRemote; setTStatus(''); renderThreshold(); });
 $('t-reset').addEventListener('click', () => writeThreshold(null));
-window.addEventListener('beforeunload', (e) => { if (isDirty() || playersDirty() || (loaded.threshold && thresholdDraft !== thresholdRemote) || (odaiLoaded && odaiDraft !== odaiRemote)) e.preventDefault(); });
+window.addEventListener('beforeunload', (e) => { if (isDirty() || playersDirty() || (loaded.threshold && thresholdDraft !== thresholdRemote) || (odaiLoaded && odaiDraft !== odaiRemote) || (pcountLoaded && pcountDraft !== pcountRemote)) e.preventDefault(); });
 
 onValue(ref(db, JUDGES_PATH), (snap) => {
   const wasDirty = remote && isDirty();
