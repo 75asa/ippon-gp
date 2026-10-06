@@ -1,0 +1,40 @@
+# web/src/shared の純粋関数のユニットテスト（tests/unit）。依存は Node だけ（npm install なし・Java なし）。
+# 手元: node --test tests/unit/*.test.mjs（ディレクトリ指定の `node --test tests/unit/` は動かない）
+name: Test unit
+
+on:
+  pull_request:
+    # ready_for_review: draft の PR では動かさない（Actions の分を節約）
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "web/**"
+      - "tests/unit/**"
+      - ".github/workflows/test-unit.yml"
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "tests/unit/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 同じ ref の古い実行は、新しい push で打ち切る
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: node --test tests/unit/*.test.mjs

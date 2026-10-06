@@ -6,6 +6,8 @@ name: Test RTDB rules
 
 on:
   pull_request:
+    # ready_for_review: draft の PR では動かさない（Actions の分を節約）
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "firebase/**"
       - "tests/rules/**"
@@ -22,9 +24,16 @@ on:
 permissions:
   contents: read
 
+# 同じ ref の古い実行は、新しい push で打ち切る
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   rules:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -35,5 +44,10 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+      # エミュレータの jar（数十 MB）を毎回ダウンロードしない。firebase-tools を上げたらキーも変える
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-15.31.0
       - name: Run rules tests on the emulator
         run: npx --yes firebase-tools@15.31.0 emulators:exec --only database --project demo-ippon "node tests/rules/test-rules.mjs --load-rules"
